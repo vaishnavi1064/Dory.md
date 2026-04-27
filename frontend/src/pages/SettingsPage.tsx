@@ -254,7 +254,11 @@ function DemoDataSection() {
   async function handleSeed() {
     setStatus('loading');
     try {
-      const res = await fetch(`${config.apiBaseUrl}/api/seed`, { method: 'POST' });
+      const token = localStorage.getItem('dory-token');
+      const res = await fetch(`${config.apiBaseUrl}/api/seed`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const data = await res.json();
       setMsg(data.message);
       setStatus(data.seeded > 0 ? 'done' : 'skipped');

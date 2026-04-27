@@ -2,12 +2,13 @@ import math
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from core.decay_engine import calculate_retention, classify_retention
 from core.embeddings import embed_query
-from database.db import DEFAULT_USER_ID, get_chunk
+from database.db import get_chunk
 from models.schemas import SearchRequest, SearchResponse, SearchResult
+from routers.deps import get_current_user_id
 from services.chroma_service import query_similar
 
 router = APIRouter()
@@ -36,12 +37,12 @@ def _time_ago(dt: datetime) -> str:
 
 
 @router.post("/search", response_model=SearchResponse)
-def context_search(body: SearchRequest):
+def context_search(body: SearchRequest, user_id: str = Depends(get_current_user_id)):
     if not body.context.strip():
         raise HTTPException(status_code=400, detail="Context cannot be empty.")
 
     q_emb = embed_query(body.context)
-    raw = query_similar(q_emb, DEFAULT_USER_ID, n_results=50)
+    raw = query_similar(q_emb, user_id, n_results=50)
 
     if not raw["ids"]:
         return SearchResponse(results=[], discovery=None)
@@ -61,8 +62,6 @@ def context_search(body: SearchRequest):
     scored.sort(key=lambda x: x[0], reverse=True)
     top = scored[: max(body.limit, 10)]
 
-    # Discovery: chunk in top-10 with highest decay_urgency × cosine_similarity
-    # (not necessarily the top composite-ranked result)
     sim_map = {cid: s for cid, s in zip(raw["ids"], raw["similarities"])}
     best_discovery_score = -1.0
     discovery_idx = None
@@ -133,10 +132,14 @@ def _to_chunk_full(row: dict, retention: float) -> dict:
 
 
 @router.get("/search")
-def search_get(q: str = Query(..., min_length=1), limit: int = Query(default=5, ge=1, le=20)):
+def search_get(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(default=5, ge=1, le=20),
+    user_id: str = Depends(get_current_user_id),
+):
     """GET /api/search?q=... — frontend-compatible endpoint."""
     q_emb = embed_query(q)
-    raw = query_similar(q_emb, DEFAULT_USER_ID, n_results=50)
+    raw = query_similar(q_emb, user_id, n_results=50)
 
     if not raw["ids"]:
         return {"results": [], "query": q, "total": 0}

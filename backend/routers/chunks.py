@@ -1,11 +1,10 @@
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from core.decay_engine import calculate_retention, classify_retention
 from database.db import (
-    DEFAULT_USER_ID,
     delete_chunk,
     get_all_chunks,
     get_chunk_full,
@@ -21,6 +20,7 @@ from models.schemas import (
     FolderRequest,
     UpdateChunkRequest,
 )
+from routers.deps import get_current_user_id
 
 router = APIRouter()
 
@@ -51,9 +51,10 @@ def _basename(path: str) -> str:
 def get_chunks(
     limit: int = Query(default=2000, ge=1, le=5000),
     sort: str = Query(default="retention", pattern="^(retention|recent|access)$"),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Return ALL chunks for Library and Calendar views."""
-    rows = get_all_chunks(DEFAULT_USER_ID)
+    rows = get_all_chunks(user_id)
     results: list[ChunkOut] = []
 
     for row in rows:
@@ -85,7 +86,7 @@ def get_chunks(
 
 
 @router.get("/chunks/{chunk_id}", response_model=ChunkDetailOut)
-def get_chunk_detail(chunk_id: str):
+def get_chunk_detail(chunk_id: str, user_id: str = Depends(get_current_user_id)):
     """Return full (untruncated) chunk content for editing."""
     row = get_chunk_full(chunk_id)
     if not row:
@@ -99,7 +100,7 @@ def get_chunk_detail(chunk_id: str):
 
 
 @router.put("/chunks/{chunk_id}")
-def update_chunk(chunk_id: str, body: UpdateChunkRequest):
+def update_chunk(chunk_id: str, body: UpdateChunkRequest, user_id: str = Depends(get_current_user_id)):
     """Update chunk content (used by inline editor)."""
     row = get_chunk_full(chunk_id)
     if not row:
@@ -109,14 +110,14 @@ def update_chunk(chunk_id: str, body: UpdateChunkRequest):
 
 
 @router.delete("/chunks/{chunk_id}")
-def delete_chunk_route(chunk_id: str):
+def delete_chunk_route(chunk_id: str, user_id: str = Depends(get_current_user_id)):
     """Delete a single chunk."""
     delete_chunk(chunk_id)
     return {"deleted": chunk_id}
 
 
 @router.post("/chunks/bulk-delete")
-def bulk_delete_chunks(body: BulkDeleteRequest):
+def bulk_delete_chunks(body: BulkDeleteRequest, user_id: str = Depends(get_current_user_id)):
     """Delete multiple chunks by ID."""
     for cid in body.chunk_ids:
         delete_chunk(cid)
@@ -124,7 +125,7 @@ def bulk_delete_chunks(body: BulkDeleteRequest):
 
 
 @router.patch("/chunks/{chunk_id}/folder")
-def patch_chunk_folder(chunk_id: str, body: FolderRequest):
+def patch_chunk_folder(chunk_id: str, body: FolderRequest, user_id: str = Depends(get_current_user_id)):
     """Move a chunk to a folder (or remove from folder if folder=null)."""
     row = get_chunk_full(chunk_id)
     if not row:
@@ -134,6 +135,6 @@ def patch_chunk_folder(chunk_id: str, body: FolderRequest):
 
 
 @router.get("/folders")
-def list_folders():
+def list_folders(user_id: str = Depends(get_current_user_id)):
     """List all distinct folder names."""
-    return {"folders": get_folders(DEFAULT_USER_ID)}
+    return {"folders": get_folders(user_id)}

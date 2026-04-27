@@ -8,10 +8,11 @@ Returns {has_discovery: false} when nothing warrants a notification.
 import math
 from datetime import datetime, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from core.decay_engine import calculate_retention, classify_retention, stability, complexity_modifier, _BASE_HOURS
-from database.db import DEFAULT_USER_ID, get_all_chunks
+from database.db import get_all_chunks
+from routers.deps import get_current_user_id
 
 router = APIRouter()
 
@@ -64,8 +65,8 @@ def _to_chunk_full(row: dict, retention: float) -> dict:
 
 
 @router.get("/discovery")
-def get_discovery():
-    rows = get_all_chunks(DEFAULT_USER_ID)
+def get_discovery(user_id: str = Depends(get_current_user_id)):
+    rows = get_all_chunks(user_id)
     if not rows:
         return {"has_discovery": False}
 
@@ -76,7 +77,6 @@ def get_discovery():
         row = dict(row)
         last_accessed = _parse_dt(row["last_accessed"])
         r = calculate_retention(last_accessed, row["access_count"], row["complexity_score"])
-        # Target the fading/weak band (0.1–0.65) — critical ones are already surfaced in fading feed
         if 0.1 <= r <= 0.65 and r < best_retention:
             best_retention = r
             best_row = row

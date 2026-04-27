@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from core.decay_engine import calculate_retention, classify_retention
-from database.db import DEFAULT_USER_ID, get_all_chunks
+from database.db import get_all_chunks
 from models.schemas import ChunkOut, FadingResponse
+from routers.deps import get_current_user_id
 
 router = APIRouter()
 
@@ -28,8 +29,11 @@ def _time_ago(dt: datetime) -> str:
 
 
 @router.get("/fading", response_model=FadingResponse)
-def get_fading(limit: int = Query(default=20, ge=1, le=2000)):
-    rows = get_all_chunks(DEFAULT_USER_ID)
+def get_fading(
+    limit: int = Query(default=20, ge=1, le=2000),
+    user_id: str = Depends(get_current_user_id),
+):
+    rows = get_all_chunks(user_id)
     results: list[ChunkOut] = []
 
     for row in rows:

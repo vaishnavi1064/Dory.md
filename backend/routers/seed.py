@@ -3,9 +3,10 @@ import random
 import threading
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from database.db import DEFAULT_USER_ID, get_all_chunks, insert_chunk
+from database.db import get_all_chunks, insert_chunk
+from routers.deps import get_current_user_id
 from core.embeddings import embed_texts
 from services.chroma_service import add_chunks
 from services.category_service import classify_all_uncategorized
@@ -53,8 +54,8 @@ _PROFILES = {
 
 
 @router.post("/seed")
-def seed_demo_data():
-    existing = get_all_chunks(DEFAULT_USER_ID)
+def seed_demo_data(user_id: str = Depends(get_current_user_id)):
+    existing = get_all_chunks(user_id)
     already = sum(1 for r in existing if (r["source_file"] or "").startswith("demo/"))
     if already >= 10:
         return {"message": f"Demo data already loaded ({already} demo chunks present).", "seeded": 0}
@@ -75,13 +76,13 @@ def seed_demo_data():
             content=content,
             source_file=source,
             complexity_score=round(random.uniform(0.4, 0.8), 2),
-            user_id=DEFAULT_USER_ID,
+            user_id=user_id,
             created_at=created_at,
             last_accessed=last_accessed,
             access_count=access_count,
         )
         chunk_ids.append(cid)
-        metadatas.append({"user_id": DEFAULT_USER_ID, "chunk_id": cid, "source_file": source})
+        metadatas.append({"user_id": user_id, "chunk_id": cid, "source_file": source})
 
     add_chunks(chunk_ids, embeddings, metadatas)
     threading.Thread(target=classify_all_uncategorized, daemon=True).start()

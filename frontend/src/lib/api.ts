@@ -26,8 +26,12 @@ import mockDiscovery from '@/data/mock_discovery.json';
 import mockQuiz from '@/data/mock_quiz.json';
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = localStorage.getItem('dory-token');
   const res = await fetch(`${config.apiBaseUrl}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     ...init,
   });
   if (!res.ok) {
@@ -172,7 +176,12 @@ export async function getSearchResults(query: string): Promise<SearchResponse> {
 export async function ingestFile(file: File): Promise<FileIngestResponse> {
   const form = new FormData();
   form.append('files', file);
-  const res = await fetch(`${config.apiBaseUrl}/api/ingest`, { method: 'POST', body: form });
+  const token = localStorage.getItem('dory-token');
+  const res = await fetch(`${config.apiBaseUrl}/api/ingest`, {
+    method: 'POST',
+    body: form,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`API ${res.status}: ${text}`);

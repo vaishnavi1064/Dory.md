@@ -1,11 +1,10 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from core.decay_engine import calculate_retention
 from database.db import (
-    DEFAULT_USER_ID,
     create_quiz_session,
     get_chunk,
     get_lowest_retention_chunks,
@@ -20,6 +19,7 @@ from models.schemas import (
     QuizSubmitResponse,
     QuizResultItem,
 )
+from routers.deps import get_current_user_id
 from services.llm_service import get_llm
 
 # In-memory store: {session_id: {question_id: {correct_index, chunk_id}}}
@@ -103,7 +103,6 @@ def _generate_question(chunk_id: str, content: str, access_count: int, complexit
     options = result.get("options", fallback_q["options"])
     correct_index = int(result.get("correct_index", fallback_q["correct_index"]))
 
-    # Validate structure
     if not isinstance(options, list) or len(options) < 2:
         options = fallback_q["options"]
         correct_index = fallback_q["correct_index"]
@@ -123,9 +122,9 @@ def _generate_question(chunk_id: str, content: str, access_count: int, complexit
 
 
 @router.post("/quiz/start", response_model=QuizStartResponse)
-def start_quiz():
-    rows = get_lowest_retention_chunks(DEFAULT_USER_ID, limit=5)
-    session_id = create_quiz_session(DEFAULT_USER_ID, total=len(rows) or 5)
+def start_quiz(user_id: str = Depends(get_current_user_id)):
+    rows = get_lowest_retention_chunks(user_id, limit=5)
+    session_id = create_quiz_session(user_id, total=len(rows) or 5)
 
     now_iso = datetime.now(tz=timezone.utc).isoformat()
 
@@ -171,7 +170,7 @@ def start_quiz():
 
 
 @router.post("/quiz/answer", response_model=QuizAnswerResponse)
-def submit_answer(body: QuizAnswerRequest):
+def submit_answer(body: QuizAnswerRequest, user_id: str = Depends(get_current_user_id)):
     correct = body.selected_index == body.correct_index
     if correct and not body.chunk_id.startswith("fallback-"):
         updated = update_chunk_access_by(body.chunk_id, delta=2, source="quiz")
@@ -189,13 +188,12 @@ def submit_answer(body: QuizAnswerRequest):
 
 
 @router.post("/quiz/{session_id}/submit", response_model=QuizSubmitResponse)
-def submit_quiz(session_id: str, body: QuizSubmitRequest):
+def submit_quiz(session_id: str, body: QuizSubmitRequest, user_id: str = Depends(get_current_user_id)):
     """Batch answer submission — matches frontend POST /api/quiz/{sessionId}/submit."""
     session_map = _session_store.get(session_id, {})
 
     results = []
     score = 0
-    streak = 0
     max_streak = 0
     current_streak = 0
 
@@ -208,7 +206,7 @@ def submit_quiz(session_id: str, body: QuizSubmitRequest):
 
         stability_delta = 0.0
         if correct and not chunk_id.startswith("fallback-"):
-            updated = update_chunk_access_by(chunk_id, delta=2, source="quiz")
+            update_chunk_access_by(chunk_id, delta=2, source="quiz")
             stability_delta = 12.0
             score += 1
             current_streak += 1

@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
 
 import numpy as np
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from core.decay_engine import calculate_retention
-from database.db import DEFAULT_USER_ID, delete_chunk, get_all_chunks
+from database.db import delete_chunk, get_all_chunks
 from models.schemas import StatsResponse
+from routers.deps import get_current_user_id
 from services.chroma_service import delete_chunk as chroma_delete
 
 router = APIRouter()
@@ -17,8 +18,8 @@ def _parse_dt(s: str) -> datetime:
 
 
 @router.get("/stats", response_model=StatsResponse)
-def get_stats():
-    rows = get_all_chunks(DEFAULT_USER_ID)
+def get_stats(user_id: str = Depends(get_current_user_id)):
+    rows = get_all_chunks(user_id)
     if not rows:
         return StatsResponse(total_chunks=0, avg_retention=1.0, strong=0, fading=0, weak=0, critical=0)
 
@@ -45,7 +46,7 @@ def get_stats():
 
 
 @router.delete("/chunks/{chunk_id}")
-def remove_chunk(chunk_id: str):
+def remove_chunk(chunk_id: str, user_id: str = Depends(get_current_user_id)):
     try:
         chroma_delete(chunk_id)
     except Exception:

@@ -1,13 +1,14 @@
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 import numpy as np
 
 from core.decay_engine import calculate_retention_batch, classify_retention
-from database.db import DEFAULT_USER_ID, get_all_chunks
+from database.db import get_all_chunks
 from models.schemas import CategoryHealth, HealthResponse
+from routers.deps import get_current_user_id
 
 router = APIRouter()
 
@@ -18,8 +19,11 @@ def _parse_dt(s: str) -> datetime:
 
 
 @router.get("/health", response_model=HealthResponse)
-def get_health(time_offset_hours: float = Query(default=0.0, ge=0.0)):
-    rows = get_all_chunks(DEFAULT_USER_ID)
+def get_health(
+    time_offset_hours: float = Query(default=0.0, ge=0.0),
+    user_id: str = Depends(get_current_user_id),
+):
+    rows = get_all_chunks(user_id)
     if not rows:
         projected = datetime.now(tz=timezone.utc) + timedelta(hours=time_offset_hours)
         return HealthResponse(
@@ -31,7 +35,6 @@ def get_health(time_offset_hours: float = Query(default=0.0, ge=0.0)):
             time_offset_hours=time_offset_hours,
         )
 
-    # Build numpy arrays for vectorized computation
     last_accessed_list = [_parse_dt(r["last_accessed"]) for r in rows]
     access_counts = [r["access_count"] for r in rows]
     complexity_scores = [r["complexity_score"] for r in rows]
@@ -41,7 +44,6 @@ def get_health(time_offset_hours: float = Query(default=0.0, ge=0.0)):
         last_accessed_list, access_counts, complexity_scores, time_offset_hours
     )
 
-    # Aggregate per category
     cat_data: dict[str, dict] = defaultdict(lambda: {"strong": 0, "fading": 0, "weak": 0, "critical": 0, "retentions": []})
     forgotten_count = 0
     for i, r in enumerate(retentions):

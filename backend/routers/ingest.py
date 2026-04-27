@@ -1,12 +1,13 @@
 import math
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 
 from core import chunker, complexity
 from core.embeddings import embed_texts
-from database.db import DEFAULT_USER_ID, insert_chunk
+from database.db import insert_chunk
 from models.schemas import IngestResponse, TextIngestRequest, TextIngestResponse
 from parsers.file_parser import parse
+from routers.deps import get_current_user_id
 from services.category_service import classify_and_store
 from services.chroma_service import add_chunks
 
@@ -19,6 +20,7 @@ MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 async def ingest_files(
     files: list[UploadFile],
     background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user_id),
 ):
     if not files:
         raise HTTPException(status_code=400, detail="No files provided.")
@@ -48,17 +50,16 @@ async def ingest_files(
                 content=chunk_text,
                 source_file=upload.filename or "upload",
                 complexity_score=score,
-                user_id=DEFAULT_USER_ID,
+                user_id=user_id,
             )
             chunk_ids.append(cid)
 
         metadatas = [
-            {"user_id": DEFAULT_USER_ID, "chunk_id": cid, "source_file": upload.filename or "upload"}
+            {"user_id": user_id, "chunk_id": cid, "source_file": upload.filename or "upload"}
             for cid in chunk_ids
         ]
         add_chunks(chunk_ids, embeddings, metadatas)
 
-        # Classify categories in background — upload returns immediately
         for cid, chunk_text in zip(chunk_ids, chunks):
             background_tasks.add_task(classify_and_store, cid, chunk_text)
 
@@ -69,7 +70,11 @@ async def ingest_files(
 
 
 @router.post("/ingest/text", response_model=TextIngestResponse)
-async def ingest_text(body: TextIngestRequest, background_tasks: BackgroundTasks):
+async def ingest_text(
+    body: TextIngestRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user_id),
+):
     """JSON ingest endpoint — matches frontend POST /api/ingest with text content."""
     if not body.content.strip():
         raise HTTPException(status_code=400, detail="Content cannot be empty.")
@@ -88,12 +93,12 @@ async def ingest_text(body: TextIngestRequest, background_tasks: BackgroundTasks
             content=chunk_text,
             source_file=source_name,
             complexity_score=score,
-            user_id=DEFAULT_USER_ID,
+            user_id=user_id,
         )
         chunk_ids.append(cid)
 
     metadatas = [
-        {"user_id": DEFAULT_USER_ID, "chunk_id": cid, "source_file": source_name}
+        {"user_id": user_id, "chunk_id": cid, "source_file": source_name}
         for cid in chunk_ids
     ]
     add_chunks(chunk_ids, embeddings, metadatas)
