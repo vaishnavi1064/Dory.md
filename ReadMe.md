@@ -179,21 +179,6 @@ python intelligence/tests/inspect_demo.py
 
 ---
 
-## 📋 48-Hour Build Timeline
-
-| Hours | Person 1 (Backend) | Person 2 (Intelligence) | Person 3 (Frontend) |
-|-------|-------------------|------------------------|-------------------|
-| 0-4 | FastAPI scaffold, schema | Demo data, package setup | React scaffold, dark mode |
-| 4-8 | File parsers | **Decay Engine** | Upload page |
-| 8-14 | Embedding pipeline | **Embedder + ChromaDB** | Dashboard |
-| 14-20 | API endpoints | **Hybrid Search** | Time Machine Slider |
-| 20-24 | Notion OAuth | **Groq Classifier** | Discovery Card |
-| 24-30 | Edge cases | **Quiz Generator** | Quiz UI |
-| 30-38 | Integration | Integration testing | Connect to API |
-| 38-48 | Deploy + polish | Bug bash + buffer | Polish + deploy |
-
----
-
 ## 📝 License
 
 Built for UWB Hacks 2026. MIT License.
