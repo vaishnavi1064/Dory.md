@@ -69,16 +69,6 @@ dory-md/
 
 ---
 
-## 👥 Team Roles
-
-| Person | Role | Scope | Key Files |
-|--------|------|-------|-----------|
-| **Person 1** | Backend & Ingestion | FastAPI server, file parsing, chunking, Notion OAuth, deployment | `backend/` |
-| **Person 2** | Intelligence Engine | Decay math, embeddings, search, classifier, quiz, demo data | `intelligence/` |
-| **Person 3** | Frontend & Design | React UI, Time Machine slider, Discovery cards, Quiz UI | `frontend/` |
-
----
-
 ## 🔗 Integration Contract
 
 **Person 1 imports and calls Person 2's modules.** These are the agreed function signatures:
