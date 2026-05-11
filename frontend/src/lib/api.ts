@@ -13,6 +13,9 @@ import type {
   FadingResponse,
   ChunksResponse,
   StatsResponse,
+  ReviewQueueResponse,
+  GradeResponse,
+  Grade,
 } from './types';
 
 import mockChunks from '@/data/mock_chunks.json';
@@ -244,4 +247,17 @@ export async function aiOptimize(original: string, expanded: string): Promise<st
     body: JSON.stringify({ original, expanded }),
   });
   return r.optimized;
+}
+
+// ── FSRS review loop ───────────────────────────────────────────────────────
+
+export async function getReviewQueue(limit = 20): Promise<ReviewQueueResponse> {
+  return apiFetch<ReviewQueueResponse>(`/api/review/queue?limit=${limit}`);
+}
+
+export async function gradeChunk(chunkId: string, grade: Grade): Promise<GradeResponse> {
+  return apiFetch<GradeResponse>('/api/review/grade', {
+    method: 'POST',
+    body: JSON.stringify({ chunk_id: chunkId, grade }),
+  });
 }

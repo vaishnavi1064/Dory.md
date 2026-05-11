@@ -112,6 +112,38 @@ class ReviewResponse(BaseModel):
     message: str
 
 
+class ReviewCard(BaseModel):
+    """A chunk ready to be reviewed in a study session."""
+    chunk_id: str
+    content: str
+    source_file: str
+    category: Optional[str]
+    fsrs_state: int        # 1=Learning, 2=Review, 3=Relearning
+    fsrs_due: str          # ISO timestamp
+    fsrs_stability: Optional[float]
+    fsrs_difficulty: Optional[float]
+    fsrs_last_review: Optional[str]
+
+
+class ReviewQueueResponse(BaseModel):
+    cards: list[ReviewCard]
+    due_count: int          # total due (may exceed `cards` if limit was applied)
+
+
+class GradeRequest(BaseModel):
+    chunk_id: str
+    grade: int              # 1=Again, 2=Hard, 3=Good, 4=Easy
+
+
+class GradeResponse(BaseModel):
+    chunk_id: str
+    grade: int
+    next_due: str           # ISO timestamp of when this card will reappear
+    stability: Optional[float]
+    difficulty: Optional[float]
+    state: int
+
+
 # ── Stats ─────────────────────────────────────────────────────────────────────
 
 class StatsResponse(BaseModel):

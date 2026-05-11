@@ -34,6 +34,24 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "folder" not in chunk_cols:
         conn.execute("ALTER TABLE chunks ADD COLUMN folder TEXT DEFAULT NULL")
 
+    # FSRS spaced-repetition state. New chunks default to a fresh card with
+    # due_date = creation time so they appear in the review queue immediately.
+    if "fsrs_due" not in chunk_cols:
+        conn.execute("ALTER TABLE chunks ADD COLUMN fsrs_due TEXT")
+        conn.execute("ALTER TABLE chunks ADD COLUMN fsrs_state INTEGER DEFAULT 1")  # 1 = Learning
+        conn.execute("ALTER TABLE chunks ADD COLUMN fsrs_step INTEGER DEFAULT 0")
+        conn.execute("ALTER TABLE chunks ADD COLUMN fsrs_stability REAL")
+        conn.execute("ALTER TABLE chunks ADD COLUMN fsrs_difficulty REAL")
+        conn.execute("ALTER TABLE chunks ADD COLUMN fsrs_last_review TEXT")
+        # Backfill existing chunks so they're immediately reviewable.
+        conn.execute(
+            "UPDATE chunks SET fsrs_due = COALESCE(last_accessed, created_at, ?) WHERE fsrs_due IS NULL",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chunks_fsrs_due ON chunks(user_id, fsrs_due)"
+        )
+
     user_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
     if "name" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN name TEXT")
@@ -110,22 +128,28 @@ def insert_chunk(
     access_count: int = 0,
 ) -> str:
     chunk_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    created_iso = (created_at or datetime.now(timezone.utc)).isoformat()
+    last_accessed_iso = (last_accessed or datetime.now(timezone.utc)).isoformat()
+    # New chunks become due for review immediately — this is the FSRS-fresh state.
+    fsrs_due_iso = created_iso
     conn = _connect()
     conn.execute(
         """INSERT INTO chunks
            (id, user_id, source_file, content, complexity_score,
-            created_at, last_accessed, access_count)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            created_at, last_accessed, access_count, fsrs_due, fsrs_state, fsrs_step)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             chunk_id,
             user_id,
             source_file,
             content,
             complexity_score,
-            (created_at or datetime.now(timezone.utc)).isoformat(),
-            (last_accessed or datetime.now(timezone.utc)).isoformat(),
+            created_iso,
+            last_accessed_iso,
             access_count,
+            fsrs_due_iso,
+            1,  # Learning state
+            0,  # step 0
         ),
     )
     conn.commit()
@@ -163,6 +187,72 @@ def get_lowest_retention_chunks(user_id: str = DEFAULT_USER_ID, limit: int = 5) 
     ).fetchall()
     conn.close()
     return rows
+
+
+def get_review_queue(user_id: str, limit: int = 20, now_iso: Optional[str] = None) -> list[sqlite3.Row]:
+    """Return chunks whose FSRS due-date is at or before `now`, oldest-due first.
+    These are the cards the user should review right now."""
+    now_iso = now_iso or datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    rows = conn.execute(
+        """SELECT * FROM chunks
+           WHERE user_id = ? AND fsrs_due IS NOT NULL AND fsrs_due <= ?
+           ORDER BY fsrs_due ASC
+           LIMIT ?""",
+        (user_id, now_iso, limit),
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def count_due_chunks(user_id: str, now_iso: Optional[str] = None) -> int:
+    """Total number of chunks currently due for review for this user."""
+    now_iso = now_iso or datetime.now(timezone.utc).isoformat()
+    conn = _connect()
+    row = conn.execute(
+        "SELECT COUNT(*) FROM chunks WHERE user_id = ? AND fsrs_due IS NOT NULL AND fsrs_due <= ?",
+        (user_id, now_iso),
+    ).fetchone()
+    conn.close()
+    return row[0]
+
+
+def apply_fsrs_update(chunk_id: str, user_id: str, fsrs: dict) -> bool:
+    """Persist the FSRS state returned by the scheduler. Returns True if the
+    chunk exists and belongs to the user."""
+    conn = _connect()
+    cursor = conn.execute(
+        """UPDATE chunks
+           SET fsrs_state = ?,
+               fsrs_step = ?,
+               fsrs_stability = ?,
+               fsrs_difficulty = ?,
+               fsrs_due = ?,
+               fsrs_last_review = ?,
+               last_accessed = ?,
+               access_count = access_count + 1
+           WHERE id = ? AND user_id = ?""",
+        (
+            fsrs["fsrs_state"],
+            fsrs["fsrs_step"],
+            fsrs["fsrs_stability"],
+            fsrs["fsrs_difficulty"],
+            fsrs["fsrs_due"],
+            fsrs["fsrs_last_review"],
+            datetime.now(timezone.utc).isoformat(),
+            chunk_id,
+            user_id,
+        ),
+    )
+    updated = cursor.rowcount > 0
+    if updated:
+        conn.execute(
+            "INSERT INTO access_log (chunk_id, user_id, accessed_at, source) VALUES (?, ?, ?, ?)",
+            (chunk_id, user_id, datetime.now(timezone.utc).isoformat(), "review"),
+        )
+    conn.commit()
+    conn.close()
+    return updated
 
 
 def update_chunk_access(chunk_id: str, user_id: str, source: str = "manual") -> Optional[sqlite3.Row]:

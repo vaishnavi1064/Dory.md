@@ -6,9 +6,9 @@ import {
   CheckCircle2, Clock3, Sparkles, UploadCloud,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getDiscovery, getFading, getStats } from '@/lib/api';
+import { getDiscovery, getReviewQueue, getStats } from '@/lib/api';
 import { projectRetention, useTreeData } from '@/lib/useDashboardData';
-import type { BackendChunk, DiscoveryResponse, StatsResponse } from '@/lib/types';
+import type { DiscoveryResponse, ReviewCard, StatsResponse } from '@/lib/types';
 import { retentionToColor, retentionToLabel } from '@/styles/theme';
 
 /* ─── Horizon chips (compact replacement for the big slider) ──────────── */
@@ -28,20 +28,28 @@ function pct(n = 0) { return `${Math.round(n * 100)}%`; }
 
 function baseName(path: string) { return path.split(/[\\/]/).pop() ?? path; }
 
-function chunkTitle(c: BackendChunk) {
+function cardTitle(c: { content: string; source_file: string }) {
   const firstLine = c.content.split('\n')[0].trim();
   if (firstLine.length > 76) return firstLine.slice(0, 76) + '…';
   return firstLine || baseName(c.source_file);
 }
 
-function relativeAge(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const days = Math.floor(ms / 86_400_000);
-  if (days === 0) return 'today';
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
-  return `${Math.floor(days / 365)}y ago`;
+/** Map FSRS stability (in days) to one of our retention colors. */
+function stabilityColor(stabilityDays: number | null): string {
+  if (stabilityDays == null) return '#c94433'; // never reviewed = fragile
+  if (stabilityDays < 1)  return '#c94433';    // critical
+  if (stabilityDays < 7)  return '#d66a2f';    // weak
+  if (stabilityDays < 30) return '#c97917';    // fading
+  return '#3a8d54';                            // strong
+}
+
+function stabilityLabel(s: number | null): string {
+  if (s == null) return 'new';
+  if (s < 1)  return '< 1d';
+  if (s < 7)  return `${Math.round(s)}d`;
+  if (s < 30) return `${Math.round(s)}d`;
+  if (s < 365) return `${Math.round(s / 30)}mo`;
+  return `${Math.round(s / 365)}y`;
 }
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -67,14 +75,17 @@ export function Dashboard() {
   const { user } = useAuth();
   const { chunks, loading } = useTreeData();
   const [stats, setStats] = useState<StatsResponse | null>(null);
-  const [fading, setFading] = useState<BackendChunk[]>([]);
+  const [dueCards, setDueCards] = useState<ReviewCard[]>([]);
+  const [dueCount, setDueCount] = useState(0);
   const [discovery, setDiscovery] = useState<DiscoveryResponse | null>(null);
   const [horizonIndex, setHorizonIndex] = useState(0);
   const horizon = HORIZONS[horizonIndex];
 
   useEffect(() => {
     getStats().then(setStats).catch(() => {});
-    getFading(8).then(r => setFading(r.chunks)).catch(() => {});
+    getReviewQueue(8)
+      .then(r => { setDueCards(r.cards); setDueCount(r.due_count); })
+      .catch(() => {});
     getDiscovery().then(setDiscovery).catch(() => {});
   }, []);
 
@@ -198,19 +209,19 @@ export function Dashboard() {
         ))}
       </section>
 
-      {/* Today's review — the centerpiece */}
+      {/* Today's review — the centerpiece. Data comes from the FSRS due queue. */}
       <section>
-        <div className="mb-3 flex items-baseline justify-between">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-[var(--text-1)]">Today's review</h2>
             <p className="mt-0.5 text-sm text-[var(--text-3)]">
-              {fading.length > 0
-                ? `${fading.length} memor${fading.length === 1 ? 'y' : 'ies'} need attention`
+              {dueCount > 0
+                ? <><span className="font-bold text-[var(--text-1)]">{dueCount}</span> card{dueCount === 1 ? '' : 's'} due for review</>
                 : 'You\'re all caught up.'}
             </p>
           </div>
-          {fading.length > 0 && (
-            <Link to="/quiz" className="btn-primary text-sm">
+          {dueCount > 0 && (
+            <Link to="/review" className="btn-primary text-sm shrink-0">
               <BrainCircuit size={14} /> Start review
             </Link>
           )}
@@ -220,61 +231,53 @@ export function Dashboard() {
           <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-6 text-center text-sm text-[var(--text-3)]">
             Loading…
           </div>
-        ) : fading.length === 0 ? (
+        ) : dueCards.length === 0 ? (
           <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-6 text-center">
             <CheckCircle2 size={28} className="mx-auto text-[var(--good)]" />
             <p className="mt-2 font-bold text-[var(--text-1)]">All caught up</p>
             <p className="mt-1 text-sm text-[var(--text-3)]">
-              No memories are fading right now. Come back tomorrow.
+              No cards are due for review right now. Come back tomorrow.
             </p>
           </div>
         ) : (
           <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] overflow-hidden divide-y divide-[var(--border)]">
-            {fading.map((chunk, i) => {
-              const color = retentionToColor(chunk.retention);
+            {dueCards.map((card, i) => {
+              const color = stabilityColor(card.fsrs_stability);
               return (
                 <motion.div
-                  key={chunk.chunk_id}
+                  key={card.chunk_id}
                   initial={{ opacity: 0, x: -4 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.025 }}
                 >
                   <Link
-                    to={`/library?chunk=${encodeURIComponent(chunk.chunk_id)}`}
+                    to={`/library?chunk=${encodeURIComponent(card.chunk_id)}`}
                     className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[var(--surface-2)]"
                   >
-                    {/* Status dot */}
+                    {/* Stability dot — green = durable memory, red = fragile */}
                     <span
                       className="block h-2 w-2 rounded-full shrink-0"
                       style={{ background: color }}
+                      title={`Stability: ${stabilityLabel(card.fsrs_stability)}`}
                     />
 
                     {/* Title + source */}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-[var(--text-1)]">
-                        {chunkTitle(chunk)}
+                        {cardTitle(card)}
                       </p>
                       <p className="mt-0.5 truncate text-xs text-[var(--text-3)]">
-                        {baseName(chunk.source_file)}
+                        {baseName(card.source_file)}
                       </p>
                     </div>
 
-                    {/* Retention bar */}
-                    <div className="hidden sm:block w-24 shrink-0">
-                      <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]">
-                        <div
-                          className="h-full"
-                          style={{ width: `${Math.max(2, chunk.retention * 100)}%`, background: color }}
-                        />
-                      </div>
-                      <p className="mt-1 text-right text-[10px] font-mono font-bold" style={{ color }}>
-                        {pct(chunk.retention)}
-                      </p>
-                    </div>
-
-                    {/* Age */}
-                    <span className="hidden md:block w-20 shrink-0 text-right text-xs text-[var(--text-3)]">
-                      {relativeAge(chunk.last_accessed_iso)}
+                    {/* Stability label */}
+                    <span
+                      className="hidden sm:block w-16 shrink-0 text-right text-[11px] font-mono font-bold"
+                      style={{ color }}
+                      title="FSRS stability"
+                    >
+                      {stabilityLabel(card.fsrs_stability)}
                     </span>
 
                     <ChevronRight size={14} className="shrink-0 text-[var(--text-4)] opacity-0 transition-opacity group-hover:opacity-100" />
@@ -343,9 +346,9 @@ export function Dashboard() {
                 </span>
                 <ArrowRight size={14} className="text-[var(--text-4)]" />
               </Link>
-              <Link to="/quiz" className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-[var(--surface-2)]">
+              <Link to="/review" className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-[var(--surface-2)]">
                 <span className="inline-flex items-center gap-2.5 text-sm font-medium text-[var(--text-1)]">
-                  <BrainCircuit size={15} className="text-[var(--accent)]" /> Quiz fading chunks
+                  <BrainCircuit size={15} className="text-[var(--accent)]" /> Review due cards
                 </span>
                 <ArrowRight size={14} className="text-[var(--text-4)]" />
               </Link>
@@ -378,7 +381,7 @@ export function Dashboard() {
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-[var(--text-1)]">{discovery.reason}</p>
                     <p className="mt-1 line-clamp-2 text-xs text-[var(--text-2)]">
-                      {chunkTitle(discovery.chunk as unknown as BackendChunk)}
+                      {cardTitle({ content: discovery.chunk.content, source_file: discovery.chunk.source_name })}
                     </p>
                     <Link
                       to={`/library?chunk=${encodeURIComponent(discovery.chunk.id)}`}

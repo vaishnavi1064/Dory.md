@@ -13,7 +13,7 @@ const navGroups = [
       { to: '/',         label: 'Health',   icon: Activity, exact: true },
       { to: '/search',   label: 'Discover', icon: Search },
       { to: '/library',  label: 'Library',  icon: BookOpen },
-      { to: '/quiz',     label: 'Practice', icon: BrainCircuit },
+      { to: '/review',   label: 'Practice', icon: BrainCircuit },
     ],
   },
   {

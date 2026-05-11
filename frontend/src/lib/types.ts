@@ -125,3 +125,33 @@ export interface StatsResponse {
   weak: number;
   critical: number;
 }
+
+// ── Review loop (FSRS) ──────────────────────────────────────────────────────
+
+export type Grade = 1 | 2 | 3 | 4; // Again / Hard / Good / Easy
+
+export interface ReviewCard {
+  chunk_id: string;
+  content: string;
+  source_file: string;
+  category: string | null;
+  fsrs_state: number;          // 1=Learning, 2=Review, 3=Relearning
+  fsrs_due: string;            // ISO
+  fsrs_stability: number | null;
+  fsrs_difficulty: number | null;
+  fsrs_last_review: string | null;
+}
+
+export interface ReviewQueueResponse {
+  cards: ReviewCard[];
+  due_count: number;
+}
+
+export interface GradeResponse {
+  chunk_id: string;
+  grade: Grade;
+  next_due: string;
+  stability: number | null;
+  difficulty: number | null;
+  state: number;
+}

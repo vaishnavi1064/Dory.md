@@ -4,6 +4,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Dashboard } from '@/pages/Dashboard';
 import { SearchPage } from '@/pages/SearchPage';
 import { QuizPage } from '@/pages/QuizPage';
+import { ReviewPage } from '@/pages/ReviewPage';
 import { LibraryPage } from '@/pages/LibraryPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { CalendarPage } from '@/pages/CalendarPage';
@@ -41,6 +42,7 @@ function AnimatedRoutes() {
                     <Route path="/"         element={<Dashboard />} />
                     <Route path="/search"   element={<SearchPage />} />
                     <Route path="/quiz"     element={<QuizPage />} />
+                    <Route path="/review"   element={<ReviewPage />} />
                     <Route path="/library"  element={<LibraryPage />} />
                     <Route path="/calendar" element={<CalendarPage />} />
                     <Route path="/notes"    element={<NoteEditorPage />} />
