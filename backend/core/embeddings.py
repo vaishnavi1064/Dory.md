@@ -1,23 +1,23 @@
 """
 Singleton SentenceTransformer wrapper.
 
-The model is loaded once at application startup (via warm_model() called in
-main.py lifespan) so the first real request is never cold.
+The model is loaded lazily (importing sentence_transformers + torch is expensive,
+so we defer it until the first ingest/search). main.py's lifespan calls warm_model()
+once at startup so the first real request is never cold; tests can skip that.
 """
 
-from sentence_transformers import SentenceTransformer
-
-_model: SentenceTransformer | None = None
+_model = None  # type: ignore[var-annotated]
 MODEL_NAME = "all-MiniLM-L6-v2"
 
 
 def warm_model() -> None:
     global _model
     if _model is None:
+        from sentence_transformers import SentenceTransformer  # heavy import: defer
         _model = SentenceTransformer(MODEL_NAME)
 
 
-def get_model() -> SentenceTransformer:
+def get_model():
     global _model
     if _model is None:
         warm_model()

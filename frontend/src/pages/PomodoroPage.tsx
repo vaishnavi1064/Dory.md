@@ -1,21 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { RotateCcw, SkipForward, Timer, TrendingUp, Flame, Clock } from 'lucide-react';
-import { Card3D } from '@/components/ui/Card3D';
+import { RotateCcw, SkipForward, Timer, TrendingUp, Flame, Clock, Play, Pause } from 'lucide-react';
 
 type Mode = 'work' | 'short' | 'long';
+
 const DURATIONS: Record<Mode, number> = { work: 25 * 60, short: 5 * 60, long: 15 * 60 };
-const LABELS:    Record<Mode, string>  = { work: 'Focus', short: 'Short Break', long: 'Long Break' };
-const COLORS:    Record<Mode, string>  = { work: '#7c3aed', short: '#0891b2', long: '#f97316' };
-const GLOWS:     Record<Mode, string>  = { work: 'rgba(124,58,237,0.5)', short: 'rgba(8,145,178,0.5)', long: 'rgba(249,115,22,0.5)' };
+const LABELS: Record<Mode, string> = { work: 'Focus', short: 'Short break', long: 'Long break' };
+const COLORS: Record<Mode, string> = { work: 'var(--accent)', short: 'var(--good)', long: 'var(--warn)' };
 const WORK_MIN = 25;
-
-const SIZE = 220;
-const STROKE = 10;
-const R = (SIZE - STROKE) / 2;
-const C = 2 * Math.PI * R;
-
 const SESSION_KEY = 'dory_pomodoro_v1';
-const TIMER_KEY   = 'dory_pomodoro_timer';
+const TIMER_KEY = 'dory_pomodoro_timer';
 
 interface StoredSession {
   mode: Mode;
@@ -28,11 +21,10 @@ interface PomodoroStore {
   totalCycles: number;
 }
 
-// Persisted timer state — survives navigation and page refresh
 interface TimerState {
   mode: Mode;
-  pausedRemaining: number; // seconds remaining when last paused/saved
-  startedAt: number | null; // epoch ms when timer was last started; null = paused
+  pausedRemaining: number;
+  startedAt: number | null;
 }
 
 function todayKey() {
@@ -45,8 +37,8 @@ function loadStore(): PomodoroStore {
   catch { return { sessions: [], totalCycles: 0 }; }
 }
 
-function saveStore(s: PomodoroStore) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+function saveStore(store: PomodoroStore) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(store));
 }
 
 function loadTimerState(): TimerState {
@@ -54,24 +46,21 @@ function loadTimerState(): TimerState {
   catch { return { mode: 'work', pausedRemaining: DURATIONS.work, startedAt: null }; }
 }
 
-function saveTimerState(s: TimerState) {
-  localStorage.setItem(TIMER_KEY, JSON.stringify(s));
+function saveTimerState(state: TimerState) {
+  localStorage.setItem(TIMER_KEY, JSON.stringify(state));
 }
 
-function computeRemaining(ts: TimerState): number {
-  if (ts.startedAt === null) return ts.pausedRemaining;
-  const elapsed = Math.floor((Date.now() - ts.startedAt) / 1000);
-  return Math.max(0, ts.pausedRemaining - elapsed);
+function computeRemaining(state: TimerState) {
+  if (state.startedAt === null) return state.pausedRemaining;
+  const elapsed = Math.floor((Date.now() - state.startedAt) / 1000);
+  return Math.max(0, state.pausedRemaining - elapsed);
 }
 
-function fmt(s: number) {
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-}
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function fmt(seconds: number) {
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-function lastNDays(n: number): string[] {
+function lastNDays(n: number) {
   const days: string[] = [];
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date();
@@ -82,83 +71,49 @@ function lastNDays(n: number): string[] {
 }
 
 export function PomodoroPage() {
-  // Restore from localStorage on mount
   const [timerState, setTimerStateRaw] = useState<TimerState>(loadTimerState);
   const [remaining, setRemaining] = useState(() => computeRemaining(loadTimerState()));
   const [store, setStore] = useState<PomodoroStore>(loadStore);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const mode    = timerState.mode;
+  const mode = timerState.mode;
   const running = timerState.startedAt !== null;
+  const total = DURATIONS[mode];
+  const progress = (total - remaining) / total;
+  const color = COLORS[mode];
 
   function setTimerState(next: TimerState) {
     setTimerStateRaw(next);
     saveTimerState(next);
   }
 
-  const total    = DURATIONS[mode];
-  const progress = (total - remaining) / total;
-  const dash     = C * (1 - progress);
-  const color    = COLORS[mode];
-  const glow     = GLOWS[mode];
-
-  // Derived stats
-  const today           = todayKey();
-  const todaySessions   = store.sessions.filter(s => s.date === today);
-  const todayWorkMin    = todaySessions.filter(s => s.mode === 'work').length * WORK_MIN;
-  const allWorkSessions = store.sessions.filter(s => s.mode === 'work').length;
-  const allBreaks       = store.sessions.filter(s => s.mode !== 'work').length;
-  const allFocusHours   = Math.floor((allWorkSessions * WORK_MIN) / 60);
-  const allFocusMinRem  = (allWorkSessions * WORK_MIN) % 60;
-
-  const weekDays   = lastNDays(7);
-  const weekCounts = weekDays.map(d => store.sessions.filter(s => s.date === d && s.mode === 'work').length);
-  const weekMax    = Math.max(...weekCounts, 1);
-
   const finish = useCallback(() => {
     const finishedMode = mode;
     const entry: StoredSession = { mode: finishedMode, at: new Date().toISOString(), date: todayKey() };
-
-    setStore(prev => {
-      const next: PomodoroStore = {
+    setStore((prev) => {
+      const nextStore = {
         sessions: [...prev.sessions, entry],
         totalCycles: finishedMode === 'work' ? prev.totalCycles + 1 : prev.totalCycles,
       };
-      saveStore(next);
-      // Auto-advance mode
+      saveStore(nextStore);
       const nextMode: Mode = finishedMode === 'work'
-        ? (next.totalCycles % 4 === 0 && next.totalCycles > 0 ? 'long' : 'short')
+        ? (nextStore.totalCycles % 4 === 0 && nextStore.totalCycles > 0 ? 'long' : 'short')
         : 'work';
-      const nextRemaining = DURATIONS[nextMode];
-      const nextTimer: TimerState = { mode: nextMode, pausedRemaining: nextRemaining, startedAt: null };
+      const nextTimer = { mode: nextMode, pausedRemaining: DURATIONS[nextMode], startedAt: null };
       setTimerState(nextTimer);
-      setRemaining(nextRemaining);
-      return next;
+      setRemaining(DURATIONS[nextMode]);
+      return nextStore;
     });
-
-    // Request notification permission and show notification
-    if ('Notification' in window) {
-      Notification.requestPermission().then(perm => {
-        if (perm === 'granted') {
-          new Notification('Dory.md — Pomodoro', {
-            body: finishedMode === 'work' ? '25min focus session complete! Time for a break.' : 'Break over. Back to focus!',
-            icon: '/favicon.ico',
-          });
-        }
-      });
-    }
   }, [mode]);
 
-  // Tick interval — only runs when on this page AND running
   useEffect(() => {
     if (!running) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       return;
     }
     intervalRef.current = setInterval(() => {
-      setRemaining(r => {
+      setRemaining((r) => {
         if (r <= 1) {
-          clearInterval(intervalRef.current!);
+          if (intervalRef.current) clearInterval(intervalRef.current);
           finish();
           return 0;
         }
@@ -168,237 +123,158 @@ export function PomodoroPage() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running, finish]);
 
-  // On mount: recalculate remaining if timer was running when we navigated away
   useEffect(() => {
-    const ts = loadTimerState();
-    if (ts.startedAt !== null) {
-      const r = computeRemaining(ts);
-      if (r <= 0) {
-        // Timer finished while away
-        finish();
-      } else {
-        setRemaining(r);
-      }
+    const state = loadTimerState();
+    if (state.startedAt !== null) {
+      const nextRemaining = computeRemaining(state);
+      if (nextRemaining <= 0) finish();
+      else setRemaining(nextRemaining);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Recalculate on tab visibility change (comes back to tab)
-  useEffect(() => {
-    function onVisible() {
-      if (document.visibilityState === 'visible') {
-        const ts = loadTimerState();
-        if (ts.startedAt !== null) {
-          const r = computeRemaining(ts);
-          setRemaining(r <= 0 ? 0 : r);
-          if (r <= 0) finish();
-        }
-      }
-    }
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [finish]);
-
   function startTimer() {
-    const next: TimerState = { mode, pausedRemaining: remaining, startedAt: Date.now() };
-    setTimerState(next);
+    setTimerState({ mode, pausedRemaining: remaining, startedAt: Date.now() });
   }
 
   function pauseTimer() {
-    const next: TimerState = { mode, pausedRemaining: remaining, startedAt: null };
-    setTimerState(next);
+    setTimerState({ mode, pausedRemaining: remaining, startedAt: null });
   }
 
   function reset() {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    const next: TimerState = { mode, pausedRemaining: DURATIONS[mode], startedAt: null };
-    setTimerState(next);
+    setTimerState({ mode, pausedRemaining: DURATIONS[mode], startedAt: null });
     setRemaining(DURATIONS[mode]);
   }
 
-  function switchMode(m: Mode) {
+  function switchMode(nextMode: Mode) {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    const next: TimerState = { mode: m, pausedRemaining: DURATIONS[m], startedAt: null };
-    setTimerState(next);
-    setRemaining(DURATIONS[m]);
+    setTimerState({ mode: nextMode, pausedRemaining: DURATIONS[nextMode], startedAt: null });
+    setRemaining(DURATIONS[nextMode]);
   }
 
-  const dayLabels = weekDays.map(d => {
-    const dt = new Date(d + 'T12:00:00');
-    return dt.toLocaleDateString([], { weekday: 'short' }).slice(0, 2);
-  });
+  const today = todayKey();
+  const todaySessions = store.sessions.filter((session) => session.date === today);
+  const todayWorkMin = todaySessions.filter((session) => session.mode === 'work').length * WORK_MIN;
+  const allWorkSessions = store.sessions.filter((session) => session.mode === 'work').length;
+  const allBreaks = store.sessions.filter((session) => session.mode !== 'work').length;
+  const weekDays = lastNDays(7);
+  const weekCounts = weekDays.map((day) => store.sessions.filter((session) => session.date === day && session.mode === 'work').length);
+  const weekMax = Math.max(...weekCounts, 1);
 
   return (
-    <div className="max-w-xl mx-auto space-y-5 animate-fade-in">
-      <div className="flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-          style={{ background: `${glow.replace('0.5','0.2')}`, border: `1px solid ${glow.replace('0.5','0.4')}`, transition: 'all 0.4s ease' }}>
-          <Timer size={15} style={{ color }} />
-        </div>
-        <div>
-          <h1 className="text-xl font-black text-white tracking-tight">Pomodoro Timer</h1>
-          <p className="text-xs text-slate-600">Deep work cycles — timer runs across pages</p>
-        </div>
-        {todayWorkMin > 0 && (
-          <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full"
-            style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.25)' }}>
-            <Flame size={11} className="text-nebula-400" />
-            <span className="text-[11px] font-mono font-bold text-nebula-300">{todayWorkMin}m today</span>
-          </div>
-        )}
-      </div>
-
-      {/* Running indicator banner */}
-      {running && (
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono"
-          style={{ background: `${color}12`, border: `1px solid ${color}30`, color }}>
-          <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: color }} />
-          Timer running — switch tabs freely, it will track the time
-        </div>
-      )}
-
-      {/* Mode selector */}
-      <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
-        {(['work', 'short', 'long'] as Mode[]).map(m => (
-          <button key={m} onClick={() => switchMode(m)}
-            className="flex-1 py-2.5 text-xs font-semibold tracking-wide transition-all duration-300"
-            style={{
-              background: mode === m ? `${COLORS[m]}22` : 'rgba(255,255,255,0.02)',
-              color: mode === m ? COLORS[m] : '#475569',
-              borderRight: m !== 'long' ? '1px solid rgba(255,255,255,0.06)' : 'none',
-              boxShadow: mode === m ? `inset 0 -2px 0 ${COLORS[m]}` : 'none',
-            }}>
-            {LABELS[m]}
-          </button>
-        ))}
-      </div>
-
-      {/* Timer ring */}
-      <Card3D className="p-8 flex flex-col items-center" intensity={5}>
-        <div className="relative" style={{ width: SIZE, height: SIZE }}>
-          <svg width={SIZE} height={SIZE} className="-rotate-90" style={{ overflow: 'visible' }}>
-            <circle cx={SIZE/2} cy={SIZE/2} r={R} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={STROKE} />
-            <circle cx={SIZE/2} cy={SIZE/2} r={R} fill="none" stroke={color} strokeWidth={STROKE + 4}
-              strokeDasharray={C} strokeDashoffset={dash} strokeLinecap="round"
-              style={{ opacity: 0.15, transition: 'stroke-dashoffset 1s linear, stroke 0.4s ease', filter: `blur(6px)` }} />
-            <circle cx={SIZE/2} cy={SIZE/2} r={R} fill="none" stroke={color} strokeWidth={STROKE}
-              strokeDasharray={C} strokeDashoffset={dash} strokeLinecap="round"
-              style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.4s ease', filter: `drop-shadow(0 0 8px ${color})` }} />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-mono font-black tabular-nums leading-none"
-              style={{ fontSize: 52, color, textShadow: `0 0 30px ${glow}` }}>
-              {fmt(remaining)}
+    <div className="mx-auto max-w-5xl space-y-5">
+      <div className="app-card p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
+              <Timer size={22} />
             </span>
-            <span className="text-xs font-semibold mt-2 tracking-wider" style={{ color }}>{LABELS[mode]}</span>
-            {running && (
-              <span className="text-[9px] font-mono tracking-widest mt-1.5 px-2 py-0.5 rounded-full"
-                style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}>
-                RUNNING
-              </span>
-            )}
+            <div>
+              <h1 className="text-2xl font-extrabold text-[var(--text-1)]">Focus timer</h1>
+              <p className="text-sm text-[var(--text-3)]">A persistent timer for deep work around review sessions.</p>
+            </div>
           </div>
+          <span className="tag"><Flame size={14} /> {todayWorkMin}m today</span>
         </div>
-
-        <div className="flex items-center gap-3 mt-6">
-          <button onClick={reset}
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-300 transition-all"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <RotateCcw size={14} />
-          </button>
-          <button onClick={running ? pauseTimer : startTimer}
-            className="px-10 py-3 rounded-xl text-sm font-bold text-white transition-all duration-200 hover:scale-105"
-            style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)`, boxShadow: `0 0 24px ${glow}, inset 0 1px 0 rgba(255,255,255,0.15)` }}>
-            {running ? '⏸ Pause' : '▶ Start'}
-          </button>
-          <button onClick={finish}
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-300 transition-all"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <SkipForward size={14} />
-          </button>
-        </div>
-      </Card3D>
-
-      {/* Live stats row */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: 'Total cycles', value: store.totalCycles, color: '#7c3aed', glow: 'rgba(124,58,237,0.4)', icon: <Flame size={12} /> },
-          { label: 'Work sessions', value: allWorkSessions, color: '#0891b2', glow: 'rgba(8,145,178,0.4)', icon: <TrendingUp size={12} /> },
-          { label: 'Breaks taken', value: allBreaks, color: '#f97316', glow: 'rgba(249,115,22,0.4)', icon: <Clock size={12} /> },
-        ].map(({ label, value, color: c, glow: g, icon }) => (
-          <Card3D key={label} className="p-4 text-center" intensity={7}>
-            <div className="flex justify-center mb-1" style={{ color: c }}>{icon}</div>
-            <p className="text-3xl font-mono font-black" style={{ color: c, textShadow: `0 0 16px ${g}` }}>{value}</p>
-            <p className="text-[10px] text-slate-600 mt-1">{label}</p>
-          </Card3D>
-        ))}
       </div>
 
-      {/* All-time focus + weekly chart */}
-      <Card3D className="p-5" intensity={4}>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-0.5">All-time focus</p>
-            <p className="text-2xl font-black text-white">
-              {allFocusHours > 0 ? (
-                <><span style={{ color: '#7c3aed' }}>{allFocusHours}h </span><span className="text-lg">{allFocusMinRem}m</span></>
-              ) : (
-                <span style={{ color: '#7c3aed' }}>{allWorkSessions * WORK_MIN}m</span>
-              )}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-0.5">Today</p>
-            <p className="text-2xl font-black" style={{ color: '#0891b2' }}>{todayWorkMin}m</p>
-          </div>
-        </div>
-
-        <div>
-          <p className="text-[10px] font-mono text-slate-600 uppercase tracking-widest mb-2">This week — work sessions</p>
-          <div className="flex items-end gap-1.5 h-14">
-            {weekCounts.map((count, i) => {
-              const isToday = weekDays[i] === today;
-              const barH = count === 0 ? 4 : Math.max(8, Math.round((count / weekMax) * 52));
-              return (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full rounded-t-sm transition-all duration-500 relative group"
-                    style={{
-                      height: barH,
-                      background: isToday ? 'linear-gradient(180deg, #7c3aed, #0891b2)' : count > 0 ? 'rgba(124,58,237,0.35)' : 'rgba(255,255,255,0.04)',
-                      boxShadow: isToday ? '0 0 8px rgba(124,58,237,0.5)' : 'none',
-                    }}>
-                    {count > 0 && <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-mono text-slate-500">{count}</span>}
-                  </div>
-                  <span className="text-[9px] font-mono" style={{ color: isToday ? '#a78bfa' : '#475569' }}>{dayLabels[i]}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </Card3D>
-
-      {store.sessions.length > 0 && (
-        <div className="gcard p-4">
-          <p className="text-[10px] font-mono text-slate-600 uppercase tracking-widest mb-3">Recent sessions</p>
-          <div className="space-y-1.5 max-h-36 overflow-y-auto">
-            {[...store.sessions].reverse().slice(0, 15).map((s, i) => (
-              <div key={i} className="flex items-center gap-3 text-xs font-mono">
-                <span className="w-1.5 h-1.5 rounded-full shrink-0"
-                  style={{ background: COLORS[s.mode], boxShadow: `0 0 4px ${COLORS[s.mode]}` }} />
-                <span className="text-slate-400">{LABELS[s.mode]}</span>
-                <span className="ml-auto text-slate-700">{fmtTime(s.at)}</span>
-                <span className="text-slate-700 w-16 text-right">{s.date === today ? 'today' : s.date}</span>
-              </div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="app-card p-6">
+          <div className="mb-6 grid grid-cols-3 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-1">
+            {(['work', 'short', 'long'] as Mode[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => switchMode(m)}
+                className={mode === m ? 'btn-primary' : 'btn-ghost'}
+                style={mode === m ? { background: COLORS[m] } : undefined}
+              >
+                {LABELS[m]}
+              </button>
             ))}
           </div>
-        </div>
-      )}
 
-      <div className="rounded-xl px-4 py-3 text-xs text-slate-500 leading-relaxed"
-        style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-        <span className="text-nebula-400 font-semibold">Pomodoro technique — </span>
-        25 min focus → 5 min break → repeat 4× → 15 min long break.
-        Timer state is saved — switch tabs or take notes freely.
+          <div className="flex flex-col items-center">
+            <div className="relative h-72 w-72">
+              <svg viewBox="0 0 280 280" className="h-full w-full -rotate-90">
+                <circle cx="140" cy="140" r="112" fill="none" stroke="#e4d9c8" strokeWidth="16" />
+                <circle
+                  cx="140"
+                  cy="140"
+                  r="112"
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="16"
+                  strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 112}`}
+                  strokeDashoffset={`${(1 - progress) * 2 * Math.PI * 112}`}
+                  style={{ transition: 'stroke-dashoffset 1s linear' }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <p className="text-6xl font-extrabold tabular-nums" style={{ color }}>{fmt(remaining)}</p>
+                <p className="mt-2 text-sm font-bold text-[var(--text-3)]">{LABELS[mode]}</p>
+                {running && <span className="tag mt-3" style={{ color, borderColor: 'currentColor' }}>Running</span>}
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center gap-3">
+              <button type="button" onClick={reset} className="btn-secondary h-11 w-11 p-0" title="Reset"><RotateCcw size={17} /></button>
+              <button type="button" onClick={running ? pauseTimer : startTimer} className="btn-primary min-w-36" style={{ background: color }}>
+                {running ? <Pause size={17} /> : <Play size={17} />}
+                {running ? 'Pause' : 'Start'}
+              </button>
+              <button type="button" onClick={finish} className="btn-secondary h-11 w-11 p-0" title="Skip"><SkipForward size={17} /></button>
+            </div>
+          </div>
+        </section>
+
+        <aside className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="app-card p-4">
+              <TrendingUp size={18} className="text-[var(--accent)]" />
+              <p className="mt-3 text-3xl font-extrabold text-[var(--text-1)]">{allWorkSessions}</p>
+              <p className="text-sm text-[var(--text-3)]">Work sessions</p>
+            </div>
+            <div className="app-card p-4">
+              <Clock size={18} className="text-[var(--warn)]" />
+              <p className="mt-3 text-3xl font-extrabold text-[var(--text-1)]">{allBreaks}</p>
+              <p className="text-sm text-[var(--text-3)]">Breaks</p>
+            </div>
+          </div>
+
+          <div className="app-card p-4">
+            <p className="app-label mb-4">This week</p>
+            <div className="flex h-28 items-end gap-2">
+              {weekCounts.map((count, index) => {
+                const height = count === 0 ? 6 : Math.max(12, Math.round((count / weekMax) * 88));
+                const label = new Date(`${weekDays[index]}T12:00:00`).toLocaleDateString([], { weekday: 'short' }).slice(0, 2);
+                return (
+                  <div key={weekDays[index]} className="flex flex-1 flex-col items-center gap-2">
+                    <div className="w-full rounded-t bg-[var(--accent)]" style={{ height, opacity: count ? 0.9 : 0.18 }} />
+                    <span className="text-xs font-bold text-[var(--text-3)]">{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="app-card p-4">
+            <p className="app-label mb-3">Recent sessions</p>
+            {store.sessions.length === 0 ? (
+              <p className="text-sm text-[var(--text-3)]">No focus sessions logged yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {[...store.sessions].reverse().slice(0, 8).map((session, index) => (
+                  <div key={`${session.at}-${index}`} className="flex items-center justify-between rounded-lg bg-[var(--surface-2)] px-3 py-2 text-sm">
+                    <span className="font-bold text-[var(--text-2)]">{LABELS[session.mode]}</span>
+                    <span className="text-[var(--text-3)]">{new Date(session.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </aside>
       </div>
     </div>
   );

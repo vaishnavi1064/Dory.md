@@ -3,8 +3,23 @@ import os
 from fastapi import Header, HTTPException
 from jose import jwt, JWTError
 
-_SECRET = os.getenv("JWT_SECRET", "dory-hackathon-secret-change-in-prod")
-_ALGO = "HS256"
+
+def _get_secret() -> str:
+    """Return JWT_SECRET. In dev (DORY_ENV=dev), fall back to a development default.
+    In any other environment, JWT_SECRET must be set or the request fails 500."""
+    env = os.getenv("DORY_ENV", "dev").lower()
+    secret = os.getenv("JWT_SECRET", "")
+    if not secret:
+        if env != "dev":
+            raise RuntimeError(
+                "JWT_SECRET is required when DORY_ENV != 'dev'. "
+                "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+            )
+        return "dory-dev-only-secret-do-not-deploy"
+    return secret
+
+
+JWT_ALGORITHM = "HS256"
 
 
 def get_current_user_id(authorization: str = Header(None)) -> str:
@@ -12,7 +27,9 @@ def get_current_user_id(authorization: str = Header(None)) -> str:
         raise HTTPException(status_code=401, detail="Not authenticated.")
     token = authorization[7:]
     try:
-        payload = jwt.decode(token, _SECRET, algorithms=[_ALGO])
+        payload = jwt.decode(token, _get_secret(), algorithms=[JWT_ALGORITHM])
+        if payload.get("typ") != "access":
+            raise HTTPException(status_code=401, detail="Wrong token type.")
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token payload.")

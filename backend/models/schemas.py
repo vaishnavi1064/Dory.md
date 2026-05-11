@@ -199,20 +199,3 @@ class TextIngestResponse(BaseModel):
     stability_S: float
     complexity_k: float
     message: str
-
-
-# ── Notion ────────────────────────────────────────────────────────────────────
-
-class NotionImportRequest(BaseModel):
-    token: Optional[str] = None  # used in internal mode
-    page_ids: list[str]
-
-
-class NotionImportResponse(BaseModel):
-    pages_imported: int
-    chunks_created: int
-
-
-class NotionPage(BaseModel):
-    id: str
-    title: str

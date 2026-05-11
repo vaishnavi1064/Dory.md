@@ -1,6 +1,3 @@
-import os
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from core.decay_engine import calculate_retention, classify_retention
@@ -20,31 +17,11 @@ from models.schemas import (
     FolderRequest,
     UpdateChunkRequest,
 )
+from routers._shared import parse_dt, time_ago
 from routers.deps import get_current_user_id
+from services.chroma_service import delete_chunk as chroma_delete
 
 router = APIRouter()
-
-
-def _parse_dt(s: str) -> datetime:
-    dt = datetime.fromisoformat(s)
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
-
-
-def _time_ago(dt: datetime) -> str:
-    now = datetime.now(tz=timezone.utc)
-    delta = now - dt
-    days = delta.days
-    if days == 0:
-        hours = delta.seconds // 3600
-        return f"{hours}h ago" if hours else "just now"
-    if days < 30:
-        return f"{days}d ago"
-    months = days // 30
-    return f"{months}mo ago"
-
-
-def _basename(path: str) -> str:
-    return os.path.basename(path) if path else path
 
 
 @router.get("/chunks", response_model=ChunksResponse)
@@ -58,7 +35,7 @@ def get_chunks(
     results: list[ChunkOut] = []
 
     for row in rows:
-        last_accessed = _parse_dt(row["last_accessed"])
+        last_accessed = parse_dt(row["last_accessed"])
         r = calculate_retention(last_accessed, row["access_count"], row["complexity_score"])
         results.append(
             ChunkOut(
@@ -68,17 +45,18 @@ def get_chunks(
                 category=row["category"],
                 retention=round(r, 4),
                 status=classify_retention(r),
-                last_accessed=_time_ago(last_accessed),
+                last_accessed=time_ago(last_accessed),
                 last_accessed_iso=last_accessed.isoformat(),
                 access_count=row["access_count"],
-                folder=row["folder"] if "folder" in row.keys() else None,
+                folder=row["folder"],
             )
         )
 
     if sort == "retention":
         results.sort(key=lambda x: x.retention)
     elif sort == "recent":
-        results.sort(key=lambda x: x.last_accessed, reverse=True)
+        # Sort by ISO timestamp, not the human-readable "Nd ago" string which would sort lexicographically.
+        results.sort(key=lambda x: x.last_accessed_iso, reverse=True)
     elif sort == "access":
         results.sort(key=lambda x: x.access_count, reverse=True)
 
@@ -88,49 +66,56 @@ def get_chunks(
 @router.get("/chunks/{chunk_id}", response_model=ChunkDetailOut)
 def get_chunk_detail(chunk_id: str, user_id: str = Depends(get_current_user_id)):
     """Return full (untruncated) chunk content for editing."""
-    row = get_chunk_full(chunk_id)
+    row = get_chunk_full(chunk_id, user_id)
     if not row:
         raise HTTPException(status_code=404, detail="Chunk not found")
     return ChunkDetailOut(
         chunk_id=row["id"],
         content=row["content"],
         source_file=row["source_file"],
-        folder=row["folder"] if "folder" in row.keys() else None,
+        folder=row["folder"],
     )
 
 
 @router.put("/chunks/{chunk_id}")
 def update_chunk(chunk_id: str, body: UpdateChunkRequest, user_id: str = Depends(get_current_user_id)):
     """Update chunk content (used by inline editor)."""
-    row = get_chunk_full(chunk_id)
-    if not row:
+    if not update_chunk_content(chunk_id, body.content, user_id):
         raise HTTPException(status_code=404, detail="Chunk not found")
-    update_chunk_content(chunk_id, body.content)
     return {"updated": chunk_id}
 
 
 @router.delete("/chunks/{chunk_id}")
 def delete_chunk_route(chunk_id: str, user_id: str = Depends(get_current_user_id)):
     """Delete a single chunk."""
-    delete_chunk(chunk_id)
+    if not delete_chunk(chunk_id, user_id):
+        raise HTTPException(status_code=404, detail="Chunk not found")
+    try:
+        chroma_delete(chunk_id, user_id)
+    except Exception:
+        pass
     return {"deleted": chunk_id}
 
 
 @router.post("/chunks/bulk-delete")
 def bulk_delete_chunks(body: BulkDeleteRequest, user_id: str = Depends(get_current_user_id)):
-    """Delete multiple chunks by ID."""
+    """Delete multiple chunks by ID. Only chunks owned by user_id are deleted."""
+    deleted = 0
     for cid in body.chunk_ids:
-        delete_chunk(cid)
-    return {"deleted": len(body.chunk_ids)}
+        if delete_chunk(cid, user_id):
+            deleted += 1
+            try:
+                chroma_delete(cid, user_id)
+            except Exception:
+                pass
+    return {"deleted": deleted}
 
 
 @router.patch("/chunks/{chunk_id}/folder")
 def patch_chunk_folder(chunk_id: str, body: FolderRequest, user_id: str = Depends(get_current_user_id)):
     """Move a chunk to a folder (or remove from folder if folder=null)."""
-    row = get_chunk_full(chunk_id)
-    if not row:
+    if not set_chunk_folder(chunk_id, body.folder, user_id):
         raise HTTPException(status_code=404, detail="Chunk not found")
-    set_chunk_folder(chunk_id, body.folder)
     return {"updated": chunk_id, "folder": body.folder}
 
 

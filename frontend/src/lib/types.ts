@@ -1,5 +1,4 @@
 export type Category = 'technical' | 'personal' | 'reference' | 'general';
-export type Urgency = 'low' | 'medium' | 'high';
 export type SourceType = 'file' | 'note' | 'url' | 'clipboard';
 export type QuizDifficulty = 'easy' | 'medium' | 'hard';
 
@@ -17,19 +16,6 @@ export interface Chunk {
   retention?: number;
   tags?: string[];
   folder?: string;
-}
-
-export interface CategoryStat {
-  name: Category;
-  avg_retention: number;
-  count: number;
-  urgency: Urgency;
-}
-
-export interface HealthResponse {
-  categories: CategoryStat[];
-  total_chunks: number;
-  time_offset_hours: number;
 }
 
 export type DiscoveryResponse =
@@ -99,28 +85,6 @@ export interface IngestResponse {
 export interface FileIngestResponse {
   chunks_created: number;
   source: string;
-}
-
-export interface NotionStatus {
-  connected: boolean;
-  oauth_available: boolean;
-  workspace?: string;
-  avatar?: string;
-}
-
-export interface NotionPage {
-  id: string;
-  title: string;
-}
-
-export interface NotionConnectResponse {
-  connected: boolean;
-  workspace: string;
-}
-
-export interface NotionImportResponse {
-  pages_imported: number;
-  chunks_created: number;
 }
 
 export interface BackendChunk {

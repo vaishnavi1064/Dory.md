@@ -1,4 +1,4 @@
-import { Brain, Bell, Plus, Upload } from 'lucide-react';
+import { Brain, Bell, Plus, Upload, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { ingestText } from '@/lib/api';
@@ -9,16 +9,15 @@ interface HeaderProps {
   onDiscoveryClick?: () => void;
 }
 
-const pageTitle: Record<string, string> = {
-  '/': 'Dashboard',
-  '/search': 'Search',
-  '/quiz': 'Quiz Mode',
-  '/library': 'Library',
-  '/notes': 'Note Editor',
-  '/pomodoro': 'Pomodoro',
-  '/calendar': 'Calendar',
-  '/notion': 'Notion',
-  '/settings': 'Settings',
+const pageMeta: Record<string, { title: string; detail: string }> = {
+  '/': { title: 'Memory health', detail: 'Watch retention, risk, and review timing.' },
+  '/search': { title: 'Discovery search', detail: 'Find the right chunk before it fades.' },
+  '/quiz': { title: 'Practice', detail: 'Turn weak memories into stronger ones.' },
+  '/library': { title: 'Library', detail: 'Browse, organize, edit, and protect chunks.' },
+  '/notes': { title: 'Write', detail: 'Draft notes and index them into Dory.' },
+  '/pomodoro': { title: 'Focus timer', detail: 'Work in sessions while your notes stay nearby.' },
+  '/calendar': { title: 'Review calendar', detail: 'See when concepts are predicted to fall off.' },
+  '/settings': { title: 'Settings', detail: 'Tune reminders, demo data, and account controls.' },
 };
 
 export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
@@ -28,6 +27,7 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
   const [ingesting, setIngesting] = useState(false);
   const [ingestSuccess, setIngestSuccess] = useState(false);
   const location = useLocation();
+  const meta = pageMeta[location.pathname] ?? pageMeta['/'];
 
   async function handleIngest() {
     if (!ingestContent.trim()) return;
@@ -36,7 +36,10 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
       await ingestText(ingestContent.trim());
       setIngestSuccess(true);
       setIngestContent('');
-      setTimeout(() => { setIngestSuccess(false); setShowIngest(false); }, 1500);
+      window.setTimeout(() => {
+        setIngestSuccess(false);
+        setShowIngest(false);
+      }, 1100);
     } finally {
       setIngesting(false);
     }
@@ -44,124 +47,76 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
 
   return (
     <>
-      <header
-        className="sticky top-0 z-40 flex items-center justify-between px-4 h-12"
-        style={{
-          background: '#0a0a0a',
-          borderBottom: '1px solid #1a1a1a',
-        }}
-      >
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 shrink-0 group">
-          <div
-            className="w-6 h-6 rounded-md flex items-center justify-center"
-            style={{ background: '#7c3aed' }}
-          >
-            <Brain size={13} className="text-white" />
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-[var(--border)] bg-[rgba(255,253,248,0.92)] px-4 backdrop-blur md:px-6">
+        <div className="flex min-w-0 items-center gap-4">
+          <Link to="/" className="flex shrink-0 items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
+              <Brain size={18} />
+            </span>
+            <span className="hidden font-bold text-[var(--text-1)] sm:inline">Dory.md</span>
+          </Link>
+          <div className="hidden min-w-0 border-l border-[var(--border)] pl-4 md:block">
+            <p className="text-sm font-bold text-[var(--text-1)]">{meta.title}</p>
+            <p className="truncate text-xs text-[var(--text-3)]">{meta.detail}</p>
           </div>
-          <span className="font-semibold text-white text-sm tracking-wide">Dory.md</span>
-        </Link>
+        </div>
 
-        {/* Breadcrumb */}
-        <span className="hidden md:block text-xs" style={{ color: '#444' }}>
-          {pageTitle[location.pathname] ?? ''}
-        </span>
-
-        {/* Actions */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setShowUpload(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors"
-            style={{ color: '#666', background: 'transparent' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#1a1a1a'; (e.currentTarget as HTMLElement).style.color = '#ccc'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#666'; }}
-          >
-            <Upload size={13} />
-            Upload
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setShowUpload(true)} className="btn-secondary">
+            <Upload size={15} />
+            <span className="hidden sm:inline">Upload</span>
           </button>
-
-          <button
-            onClick={() => setShowIngest(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-white transition-all"
-            style={{ background: '#7c3aed' }}
-            onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = '#6d28d9')}
-            onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '#7c3aed')}
-          >
-            <Plus size={13} />
-            Add memory
+          <button type="button" onClick={() => setShowIngest(true)} className="btn-primary">
+            <Plus size={15} />
+            <span>Add memory</span>
           </button>
-
           <button
+            type="button"
             onClick={onDiscoveryClick}
-            className="relative p-1.5 rounded-md transition-colors"
-            style={{ color: hasDiscovery ? '#f97316' : '#444' }}
-            onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = '#1a1a1a')}
-            onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
+            className="btn-ghost relative h-9 w-9 p-0"
+            title="Discovery notifications"
           >
-            <Bell size={15} />
-            {hasDiscovery && (
-              <span
-                className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full"
-                style={{ background: '#f97316' }}
-              />
-            )}
+            <Bell size={16} />
+            {hasDiscovery && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[var(--warn)]" />}
           </button>
         </div>
       </header>
 
-      {/* Text ingest modal */}
       {showIngest && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          onClick={e => { if (e.target === e.currentTarget) setShowIngest(false); }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowIngest(false);
+          }}
         >
-          <div
-            className="w-full max-w-lg rounded-xl p-5 space-y-4"
-            style={{ background: '#141414', border: '1px solid #252525' }}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-white text-sm">Add a memory</h3>
-              <button
-                onClick={() => setShowIngest(false)}
-                className="text-[#444] hover:text-[#888] transition-colors text-lg leading-none"
-              >
-                ×
+          <div className="app-card w-full max-w-xl p-5 shadow-[var(--shadow)]">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-[var(--text-1)]">Add a memory</h3>
+                <p className="text-sm text-[var(--text-3)]">Paste a fragment, idea, or note. Dory will chunk and track it.</p>
+              </div>
+              <button type="button" onClick={() => setShowIngest(false)} className="btn-ghost h-8 w-8 p-0" title="Close">
+                <X size={16} />
               </button>
             </div>
             <textarea
-              className="corp-input resize-none h-36 w-full font-mono text-sm leading-relaxed"
-              placeholder="Paste text, notes, or anything you want to remember..."
+              className="corp-input min-h-40 resize-none leading-relaxed"
+              placeholder="Paste notes, transcript fragments, formulas, or anything you want to remember."
               value={ingestContent}
               onChange={(e) => setIngestContent(e.target.value)}
               autoFocus
             />
-            <div className="flex items-center justify-between gap-2">
-              <button
-                className="text-xs transition-colors"
-                style={{ color: '#555' }}
-                onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#888')}
-                onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = '#555')}
-                onClick={() => { setShowIngest(false); setShowUpload(true); }}
-              >
-                <Upload size={11} className="inline mr-1" />
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button type="button" className="btn-ghost justify-start" onClick={() => { setShowIngest(false); setShowUpload(true); }}>
+                <Upload size={14} />
                 Upload a file instead
               </button>
-              <div className="flex gap-2">
-                <button
-                  className="corp-btn-secondary px-3 py-1.5 text-xs"
-                  onClick={() => setShowIngest(false)}
-                >
+              <div className="flex justify-end gap-2">
+                <button type="button" className="btn-secondary" onClick={() => setShowIngest(false)}>
                   Cancel
                 </button>
-                <button
-                  className="corp-btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5"
-                  onClick={handleIngest}
-                  disabled={ingesting || !ingestContent.trim()}
-                >
-                  {ingesting ? (
-                    <><span className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />Processing…</>
-                  ) : ingestSuccess ? '✓ Saved!' : 'Remember this'}
+                <button type="button" className="btn-primary" onClick={handleIngest} disabled={ingesting || !ingestContent.trim()}>
+                  {ingesting ? 'Processing...' : ingestSuccess ? 'Saved' : 'Remember this'}
                 </button>
               </div>
             </div>

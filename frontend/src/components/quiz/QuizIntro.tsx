@@ -17,59 +17,51 @@ interface QuizIntroProps {
 
 export function QuizIntro({ onStart, loading }: QuizIntroProps) {
   return (
-    <div className="max-w-lg mx-auto space-y-6 py-8 animate-fade-in">
-      <div className="text-center space-y-3">
-        <div className="w-16 h-16 rounded-full bg-nebula-500/20 border border-nebula-500/40 flex items-center justify-center mx-auto animate-float">
-          <BrainCircuit size={28} className="text-nebula-400" />
+    <div className="mx-auto max-w-3xl space-y-5">
+      <div className="app-card p-6">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
+            <BrainCircuit size={30} />
+          </div>
+          <div>
+            <p className="app-label mb-2">Adaptive quiz mode</p>
+            <h1 className="text-2xl font-extrabold text-[var(--text-1)]">Strengthen what is fading.</h1>
+            <p className="mt-2 text-[var(--text-2)]">
+              Dory generates questions from low-retention chunks. Correct answers boost stability; misses become review targets.
+            </p>
+          </div>
         </div>
-        <h1 className="text-2xl font-bold text-white">Quiz Mode</h1>
-        <p className="text-slate-400 text-sm leading-relaxed">
-          Test your knowledge with questions generated from your memories.
-          Correct answers boost retention, wrong ones flag memories for review.
-        </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid gap-3 md:grid-cols-3">
         {[
-          { icon: Target, label: 'Adaptive', sub: 'Targets weak memories', color: 'text-flare-400', bg: 'rgba(249,115,22,0.1)' },
-          { icon: Zap, label: 'XP System', sub: 'Earn points per question', color: 'text-pulsar-400', bg: 'rgba(8,145,178,0.1)' },
-          { icon: Clock, label: '3 min', sub: 'Average session', color: 'text-nebula-400', bg: 'rgba(124,58,237,0.1)' },
-        ].map(({ icon: Icon, label, sub, color, bg }) => (
-          <div key={label} className="glass-card p-3 text-center space-y-1.5">
-            <div className="w-8 h-8 rounded-lg mx-auto flex items-center justify-center" style={{ background: bg }}>
-              <Icon size={14} className={color} />
-            </div>
-            <p className="text-xs font-semibold text-slate-200">{label}</p>
-            <p className="text-[10px] text-slate-500">{sub}</p>
+          { icon: Target, label: 'Adaptive', sub: 'Targets weak chunks', color: 'var(--warn)' },
+          { icon: Zap, label: 'Retention boost', sub: 'Reviews update stability', color: 'var(--accent)' },
+          { icon: Clock, label: 'Fast session', sub: 'A few focused minutes', color: 'var(--info)' },
+        ].map(({ icon: Icon, label, sub, color }) => (
+          <div key={label} className="app-card p-4">
+            <Icon size={18} style={{ color }} />
+            <p className="mt-3 font-bold text-[var(--text-1)]">{label}</p>
+            <p className="mt-1 text-sm text-[var(--text-3)]">{sub}</p>
           </div>
         ))}
       </div>
 
-      <div className="glass-card p-4 space-y-3">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Focus area</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="app-card p-5">
+        <p className="app-label mb-3">Choose focus area</p>
+        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
           {CATEGORIES.map(({ value, label }) => {
-            const color = value !== 'all' ? categoryColors[value] : '#a78bfa';
+            const color = value !== 'all' ? categoryColors[value] : 'var(--accent)';
             return (
               <button
                 key={value}
+                type="button"
                 onClick={() => onStart(value === 'all' ? undefined : value)}
                 disabled={loading}
-                className="px-3 py-2.5 rounded-lg text-sm font-medium border transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{
-                  color,
-                  borderColor: `${color}40`,
-                  background: `${color}12`,
-                }}
+                className="rounded-lg border px-4 py-3 text-sm font-bold transition hover:bg-[var(--surface-2)] disabled:opacity-50"
+                style={{ color, borderColor: value === 'all' ? 'var(--accent-border)' : `${color}55`, background: value === 'all' ? 'var(--accent-soft)' : `${color}14` }}
               >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-1.5">
-                    <span className="w-3 h-3 border border-current/30 border-t-current rounded-full animate-spin" />
-                    Loading…
-                  </span>
-                ) : (
-                  label
-                )}
+                {loading ? 'Loading...' : label}
               </button>
             );
           })}

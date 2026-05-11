@@ -11,104 +11,66 @@ interface QuizResultsProps {
 export function QuizResults({ results, session, onRestart }: QuizResultsProps) {
   const pct = Math.round((results.score / results.total) * 100);
   const grade =
-    pct >= 90 ? { label: 'Excellent!', color: '#22d3ee', emoji: '🌟' } :
-    pct >= 70 ? { label: 'Good job!', color: '#7c3aed', emoji: '🎯' } :
-    pct >= 50 ? { label: 'Keep going!', color: '#f97316', emoji: '📚' } :
-    { label: 'Needs work', color: '#dc2626', emoji: '💪' };
+    pct >= 90 ? { label: 'Excellent', color: 'var(--good)' } :
+    pct >= 70 ? { label: 'Strong session', color: 'var(--accent)' } :
+    pct >= 50 ? { label: 'Keep reviewing', color: 'var(--warn)' } :
+    { label: 'Needs attention', color: 'var(--danger)' };
 
   return (
-    <div className="max-w-lg mx-auto space-y-6 py-6 animate-fade-in">
-      <div className="text-center space-y-3">
-        <div
-          className="w-20 h-20 rounded-full mx-auto flex items-center justify-center text-3xl"
-          style={{ background: `${grade.color}18`, border: `2px solid ${grade.color}40` }}
-        >
-          {grade.emoji}
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold" style={{ color: grade.color }}>
-            {grade.label}
-          </h2>
-          <p className="text-slate-400 text-sm mt-1">
-            {results.score} / {results.total} correct
-          </p>
-        </div>
-
-        <div className="flex items-center justify-center gap-6 pt-2">
-          <div className="text-center">
-            <p className="text-3xl font-mono font-bold text-white">{pct}%</p>
-            <p className="text-xs text-slate-500">Score</p>
+    <div className="mx-auto max-w-3xl space-y-5">
+      <div className="app-card p-6 text-center">
+        <Trophy size={38} className="mx-auto" style={{ color: grade.color }} />
+        <h2 className="mt-3 text-2xl font-extrabold" style={{ color: grade.color }}>{grade.label}</h2>
+        <p className="mt-1 text-sm text-[var(--text-3)]">{results.score} of {results.total} correct</p>
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="app-card-muted p-4">
+            <p className="text-3xl font-extrabold text-[var(--text-1)]">{pct}%</p>
+            <p className="text-sm text-[var(--text-3)]">Score</p>
           </div>
-          <div className="w-px h-10 bg-cosmos-700" />
-          <div className="text-center">
-            <div className="flex items-center gap-1 justify-center">
-              <Zap size={14} className="text-pulsar-400" />
-              <p className="text-3xl font-mono font-bold text-pulsar-400">{results.xp_earned}</p>
-            </div>
-            <p className="text-xs text-slate-500">XP earned</p>
+          <div className="app-card-muted p-4">
+            <p className="inline-flex items-center gap-1 text-3xl font-extrabold text-[var(--accent)]"><Zap size={20} /> {results.xp_earned}</p>
+            <p className="text-sm text-[var(--text-3)]">XP earned</p>
           </div>
-          <div className="w-px h-10 bg-cosmos-700" />
-          <div className="text-center">
-            <div className="flex items-center gap-1 justify-center">
-              <Trophy size={14} className="text-nebula-400" />
-              <p className="text-3xl font-mono font-bold text-nebula-400">{results.streaks}</p>
-            </div>
-            <p className="text-xs text-slate-500">Streak</p>
+          <div className="app-card-muted p-4">
+            <p className="inline-flex items-center gap-1 text-3xl font-extrabold text-[var(--warn)]"><Trophy size={20} /> {results.streaks}</p>
+            <p className="text-sm text-[var(--text-3)]">Streak</p>
           </div>
         </div>
       </div>
 
-      <div className="glass-card p-4 space-y-3">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Review answers</p>
+      <div className="app-card p-5">
+        <p className="app-label mb-3">Answer review</p>
         <div className="space-y-2">
-          {results.results.map((r, i) => {
-            const q = session.questions[i];
-            if (!q) return null;
+          {results.results.map((result, index) => {
+            const question = session.questions[index];
+            if (!question) return null;
             return (
               <div
-                key={r.question_id}
+                key={result.question_id}
                 className={cn(
-                  'flex items-start gap-3 p-3 rounded-lg border text-sm',
-                  r.correct
-                    ? 'bg-green-500/5 border-green-500/20'
-                    : 'bg-red-500/5 border-red-500/20'
+                  'flex items-start gap-3 rounded-lg border p-3',
+                  result.correct
+                    ? 'border-[rgba(58,141,84,0.25)] bg-[rgba(58,141,84,0.08)]'
+                    : 'border-[rgba(201,68,51,0.25)] bg-[rgba(201,68,51,0.08)]'
                 )}
               >
-                {r.correct ? (
-                  <CheckCircle2 size={15} className="text-green-400 shrink-0 mt-0.5" />
-                ) : (
-                  <XCircle size={15} className="text-red-400 shrink-0 mt-0.5" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-slate-300 text-xs leading-relaxed">{q.question}</p>
-                  {!r.correct && (
-                    <p className="text-green-400 text-xs mt-1">
-                      ✓ {q.options[r.correct_index]}
-                    </p>
-                  )}
+                {result.correct ? <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-[var(--good)]" /> : <XCircle size={17} className="mt-0.5 shrink-0 text-[var(--danger)]" />}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold leading-relaxed text-[var(--text-1)]">{question.question}</p>
+                  {!result.correct && <p className="mt-1 text-sm text-[var(--good)]">Correct answer: {question.options[result.correct_index]}</p>}
                 </div>
-                <div className="flex items-center gap-1 text-xs shrink-0">
-                  {r.stability_delta > 0 ? (
-                    <TrendingUp size={11} className="text-green-400" />
-                  ) : (
-                    <TrendingDown size={11} className="text-red-400" />
-                  )}
-                  <span className={r.stability_delta > 0 ? 'text-green-400' : 'text-red-400'}>
-                    {r.stability_delta > 0 ? '+' : ''}{r.stability_delta}
-                  </span>
-                </div>
+                <span className={result.stability_delta > 0 ? 'tag badge-strong' : 'tag badge-critical'}>
+                  {result.stability_delta > 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+                  {result.stability_delta > 0 ? '+' : ''}{result.stability_delta}
+                </span>
               </div>
             );
           })}
         </div>
       </div>
 
-      <button
-        onClick={onRestart}
-        className="btn-primary w-full flex items-center justify-center gap-2"
-      >
-        <RotateCcw size={14} />
-        Quiz again
+      <button type="button" onClick={onRestart} className="btn-primary w-full">
+        <RotateCcw size={15} /> Quiz again
       </button>
     </div>
   );

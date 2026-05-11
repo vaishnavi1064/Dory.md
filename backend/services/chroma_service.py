@@ -72,8 +72,9 @@ def query_similar(
     return {"ids": ids, "similarities": similarities, "metadatas": metadatas}
 
 
-def delete_chunk(chunk_id: str) -> None:
-    get_collection().delete(ids=[chunk_id])
+def delete_chunk(chunk_id: str, user_id: str) -> None:
+    """Delete only if the embedding's metadata user_id matches. Silent no-op otherwise."""
+    get_collection().delete(ids=[chunk_id], where={"user_id": user_id})
 
 
 def count() -> int:

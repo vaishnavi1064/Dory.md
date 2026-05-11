@@ -1,6 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from routers.deps import get_current_user_id
 from services.llm_service import get_llm
 
 router = APIRouter()
@@ -20,7 +21,7 @@ class OptimizeRequest(BaseModel):
 
 
 @router.post("/ai/summarize")
-def summarize_note(body: SummarizeRequest):
+def summarize_note(body: SummarizeRequest, user_id: str = Depends(get_current_user_id)):
     llm = get_llm()
     result = llm.complete(
         f"Summarize these study notes in 3-5 clear, concise sentences. Return only the summary, no preamble:\n\n{body.content[:4000]}",
@@ -30,7 +31,7 @@ def summarize_note(body: SummarizeRequest):
 
 
 @router.post("/ai/expand")
-def expand_note(body: ExpandRequest):
+def expand_note(body: ExpandRequest, user_id: str = Depends(get_current_user_id)):
     llm = get_llm()
     result = llm.complete(
         f"""Generate comprehensive, detailed study notes on the topic covered in these notes.
@@ -47,7 +48,7 @@ Write detailed study notes on this topic:""",
 
 
 @router.post("/ai/optimize")
-def optimize_note(body: OptimizeRequest):
+def optimize_note(body: OptimizeRequest, user_id: str = Depends(get_current_user_id)):
     llm = get_llm()
     result = llm.complete(
         f"""You have two notes on the same topic. Combine them into one optimized study note.

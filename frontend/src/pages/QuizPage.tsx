@@ -4,6 +4,7 @@ import { QuizQuestion } from '@/components/quiz/QuizQuestion';
 import { QuizResults } from '@/components/quiz/QuizResults';
 import { startQuiz, submitQuiz } from '@/lib/api';
 import type { Category, QuizSession, QuizResults as QuizResultsType, QuizAnswer } from '@/lib/types';
+import { BrainCircuit, CalendarClock, Target } from 'lucide-react';
 
 type Phase = 'intro' | 'playing' | 'results';
 
@@ -32,46 +33,43 @@ export function QuizPage() {
     }
   }, []);
 
-  const handleAnswer = useCallback(
-    async (selectedIndex: number, timeTakenMs: number) => {
-      if (!session) return;
-      const q = session.questions[currentIndex];
-      if (!q) return;
+  const handleAnswer = useCallback(async (selectedIndex: number, timeTakenMs: number) => {
+    if (!session) return;
+    const question = session.questions[currentIndex];
+    if (!question) return;
+    const nextAnswers = [
+      ...answers,
+      { question_id: question.id, selected_index: selectedIndex, time_taken_ms: timeTakenMs },
+    ];
+    setAnswers(nextAnswers);
 
-      const newAnswers = [
-        ...answers,
-        { question_id: q.id, selected_index: selectedIndex, time_taken_ms: timeTakenMs },
-      ];
-      setAnswers(newAnswers);
+    if (currentIndex + 1 < session.questions.length) {
+      setCurrentIndex((i) => i + 1);
+      return;
+    }
 
-      if (currentIndex + 1 < session.questions.length) {
-        setCurrentIndex((i) => i + 1);
-      } else {
-        setLoading(true);
-        try {
-          const res = await submitQuiz(session.session_id, newAnswers);
-          try {
-            const historyObj = JSON.parse(localStorage.getItem('dory_quiz_history') ?? '[]');
-            historyObj.push({
-              score: res.score,
-              total: res.total,
-              date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            });
-            localStorage.setItem('dory_quiz_history', JSON.stringify(historyObj));
-          } catch (err) {
-            console.error('Failed to save quiz history', err);
-          }
-          setResults(res);
-          setPhase('results');
-        } catch (e) {
-          setError(e instanceof Error ? e.message : 'Failed to submit quiz');
-        } finally {
-          setLoading(false);
-        }
+    setLoading(true);
+    try {
+      const res = await submitQuiz(session.session_id, nextAnswers);
+      try {
+        const history = JSON.parse(localStorage.getItem('dory_quiz_history') ?? '[]');
+        history.push({
+          score: res.score,
+          total: res.total,
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        });
+        localStorage.setItem('dory_quiz_history', JSON.stringify(history));
+      } catch {
+        // History is nice to have; never block the quiz.
       }
-    },
-    [session, currentIndex, answers]
-  );
+      setResults(res);
+      setPhase('results');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to submit quiz');
+    } finally {
+      setLoading(false);
+    }
+  }, [session, currentIndex, answers]);
 
   const handleRestart = useCallback(() => {
     setPhase('intro');
@@ -82,24 +80,19 @@ export function QuizPage() {
     setError(null);
   }, []);
 
-  // Load quiz history from localStorage for sidebar stats
   const history = (() => {
     try { return JSON.parse(localStorage.getItem('dory_quiz_history') ?? '[]') as { score: number; total: number; date: string }[]; }
     catch { return []; }
   })();
-  const avgScore = history.length > 0
-    ? Math.round(history.reduce((s, h) => s + h.score / h.total, 0) / history.length * 100)
+
+  const avgScore = history.length
+    ? Math.round(history.reduce((sum, item) => sum + item.score / item.total, 0) / history.length * 100)
     : null;
 
   return (
-    <div className="flex gap-6">
-      {/* Main quiz area */}
-      <div className="flex-1 min-w-0">
-        {error && (
-          <div className="mb-4 p-3 text-sm text-red-400 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-            {error}
-          </div>
-        )}
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <main className="min-w-0">
+        {error && <div className="mb-4 rounded-lg border border-[rgba(201,68,51,0.25)] bg-[rgba(201,68,51,0.08)] p-3 text-sm font-bold text-[var(--danger)]">{error}</div>}
         {phase === 'intro' && <QuizIntro onStart={handleStart} loading={loading} />}
         {phase === 'playing' && session && (
           <QuizQuestion
@@ -112,53 +105,51 @@ export function QuizPage() {
         {phase === 'results' && results && session && (
           <QuizResults results={results} session={session} onRestart={handleRestart} />
         )}
-      </div>
+      </main>
 
-      {/* Sidebar stats */}
-      <div className="w-56 shrink-0 space-y-3 pt-1">
-        <div className="gcard p-4 space-y-3">
-          <p className="text-[10px] font-mono text-slate-600 uppercase tracking-widest">Your stats</p>
-          <div className="space-y-2">
-            <div>
-              <p className="text-xs text-slate-500">Quizzes taken</p>
-              <p className="text-2xl font-mono font-black text-white">{history.length}</p>
+      <aside className="space-y-4">
+        <div className="app-card p-4">
+          <p className="app-label mb-3">Practice stats</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="app-card-muted p-3">
+              <BrainCircuit size={17} className="text-[var(--accent)]" />
+              <p className="mt-2 text-2xl font-extrabold text-[var(--text-1)]">{history.length}</p>
+              <p className="text-sm text-[var(--text-3)]">Sessions</p>
             </div>
-            {avgScore !== null && (
-              <div>
-                <p className="text-xs text-slate-500">Avg score</p>
-                <p className="text-2xl font-mono font-black"
-                  style={{ color: avgScore >= 70 ? '#22c55e' : avgScore >= 40 ? '#eab308' : '#ef4444' }}>
-                  {avgScore}%
-                </p>
-              </div>
-            )}
+            <div className="app-card-muted p-3">
+              <Target size={17} className="text-[var(--warn)]" />
+              <p className="mt-2 text-2xl font-extrabold text-[var(--text-1)]">{avgScore ?? '-'}</p>
+              <p className="text-sm text-[var(--text-3)]">Avg score</p>
+            </div>
           </div>
         </div>
 
         {history.length > 0 && (
-          <div className="gcard p-4 space-y-2">
-            <p className="text-[10px] font-mono text-slate-600 uppercase tracking-widest">Recent</p>
-            {[...history].reverse().slice(0, 5).map((h, i) => (
-              <div key={i} className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-600 font-mono">{h.date}</span>
-                <span className="font-mono font-bold"
-                  style={{ color: h.score / h.total >= 0.7 ? '#22c55e' : h.score / h.total >= 0.4 ? '#eab308' : '#ef4444' }}>
-                  {h.score}/{h.total}
-                </span>
-              </div>
-            ))}
+          <div className="app-card p-4">
+            <p className="app-label mb-3">Recent sessions</p>
+            <div className="space-y-2">
+              {[...history].reverse().slice(0, 6).map((item, index) => {
+                const score = Math.round((item.score / item.total) * 100);
+                return (
+                  <div key={`${item.date}-${index}`} className="flex items-center justify-between rounded-lg bg-[var(--surface-2)] px-3 py-2 text-sm">
+                    <span className="inline-flex items-center gap-2 text-[var(--text-2)]"><CalendarClock size={14} /> {item.date}</span>
+                    <span className="font-bold" style={{ color: score >= 70 ? 'var(--good)' : score >= 45 ? 'var(--warn)' : 'var(--danger)' }}>{item.score}/{item.total}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        <div className="gcard p-4">
-          <p className="text-[10px] font-mono text-slate-600 uppercase tracking-widest mb-2">Tips</p>
-          <ul className="space-y-1.5 text-[11px] text-slate-600 leading-relaxed">
-            <li>• Quiz low-retention notes first</li>
-            <li>• Review within 24h of learning</li>
-            <li>• Spaced repetition builds memory</li>
-          </ul>
+        <div className="app-card p-4">
+          <p className="app-label mb-3">Review rhythm</p>
+          <div className="space-y-2 text-sm text-[var(--text-2)]">
+            <p>Start with low-retention chunks.</p>
+            <p>Review within 24 hours of first learning.</p>
+            <p>Use search after a missed question to inspect the source chunk.</p>
+          </div>
         </div>
-      </div>
+      </aside>
     </div>
   );
 }

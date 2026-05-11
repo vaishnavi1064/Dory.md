@@ -1,38 +1,75 @@
-import os
-from datetime import datetime, timedelta
+import hashlib
+import uuid
+from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from fastapi import APIRouter, HTTPException
-from jose import jwt
+from fastapi import APIRouter, Depends, HTTPException
+from jose import jwt, JWTError
 from pydantic import BaseModel
 
-from database.db import DEFAULT_USER_ID, create_user, get_user_by_email, set_user_password_hash
+from database.db import (
+    DEFAULT_USER_ID,
+    create_user,
+    get_active_refresh_token,
+    get_user_by_email,
+    get_user_by_id,
+    revoke_refresh_token,
+    set_user_password_hash,
+    store_refresh_token,
+)
+from routers.deps import JWT_ALGORITHM, _get_secret, get_current_user_id
 
 router = APIRouter()
 
-_SECRET = os.getenv("JWT_SECRET", "dory-hackathon-secret-change-in-prod")
-_ALGO = "HS256"
 _DEMO_PASSWORD = "demo123"
+ACCESS_TOKEN_TTL = timedelta(hours=1)
+REFRESH_TOKEN_TTL = timedelta(days=30)
 
 
-def _hash(password: str) -> str:
+def _hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
-def _verify(password: str, hashed: str) -> bool:
+def _verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
-def _make_token(user_id: str, email: str, name: str) -> str:
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _encode(claims: dict, ttl: timedelta) -> str:
     return jwt.encode(
-        {"sub": user_id, "email": email, "name": name,
-         "exp": datetime.utcnow() + timedelta(days=30)},
-        _SECRET, algorithm=_ALGO,
+        {**claims, "exp": datetime.now(timezone.utc) + ttl},
+        _get_secret(),
+        algorithm=JWT_ALGORITHM,
     )
 
 
+def _issue_tokens(user_id: str, email: str, name: str) -> dict:
+    # jti makes every JWT unique even when issued in the same second for the same user,
+    # so two refresh tokens never collide on their SHA-256 hash in storage.
+    access = _encode(
+        {"sub": user_id, "email": email, "name": name, "typ": "access", "jti": uuid.uuid4().hex},
+        ACCESS_TOKEN_TTL,
+    )
+    refresh = _encode(
+        {"sub": user_id, "typ": "refresh", "jti": uuid.uuid4().hex},
+        REFRESH_TOKEN_TTL,
+    )
+    store_refresh_token(_hash_token(refresh), user_id, datetime.now(timezone.utc) + REFRESH_TOKEN_TTL)
+    return {
+        "access_token": access,
+        "refresh_token": refresh,
+        "token_type": "Bearer",
+        "expires_in": int(ACCESS_TOKEN_TTL.total_seconds()),
+        "name": name,
+        "email": email,
+    }
+
+
 def setup_demo_user() -> None:
-    """Called at startup — ensures the demo user has a real bcrypt hash and a display name."""
+    """Ensure the demo user has a real bcrypt hash and a display name. Called at startup."""
     from database.db import get_connection
     conn = get_connection()
     conn.execute(
@@ -44,7 +81,7 @@ def setup_demo_user() -> None:
 
     user = get_user_by_email("demo@dory.md")
     if user and not user["password_hash"]:
-        set_user_password_hash(DEFAULT_USER_ID, _hash(_DEMO_PASSWORD))
+        set_user_password_hash(DEFAULT_USER_ID, _hash_password(_DEMO_PASSWORD))
 
 
 class RegisterBody(BaseModel):
@@ -58,6 +95,10 @@ class LoginBody(BaseModel):
     password: str
 
 
+class RefreshBody(BaseModel):
+    refresh_token: str
+
+
 @router.post("/auth/register")
 def register(body: RegisterBody):
     if len(body.name.strip()) < 2:
@@ -66,9 +107,9 @@ def register(body: RegisterBody):
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
     if get_user_by_email(body.email):
         raise HTTPException(status_code=400, detail="An account with that email already exists.")
-    user_id = create_user(body.email, body.name.strip(), _hash(body.password))
-    return {"token": _make_token(user_id, body.email, body.name.strip()),
-            "name": body.name.strip(), "email": body.email}
+    name = body.name.strip()
+    user_id = create_user(body.email, name, _hash_password(body.password))
+    return _issue_tokens(user_id, body.email, name)
 
 
 @router.post("/auth/login")
@@ -77,8 +118,37 @@ def login(body: LoginBody):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
     pwd_hash = user["password_hash"]
-    if not pwd_hash or not _verify(body.password, pwd_hash):
+    if not pwd_hash or not _verify_password(body.password, pwd_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
-    name = user["name"] or ""
-    return {"token": _make_token(user["id"], user["email"], name),
-            "name": name, "email": user["email"]}
+    return _issue_tokens(user["id"], user["email"], user["name"] or "")
+
+
+@router.post("/auth/refresh")
+def refresh(body: RefreshBody):
+    """Exchange a refresh token for a new access + refresh pair. Old refresh is revoked (rotation)."""
+    try:
+        payload = jwt.decode(body.refresh_token, _get_secret(), algorithms=[JWT_ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token.")
+    if payload.get("typ") != "refresh":
+        raise HTTPException(status_code=401, detail="Wrong token type.")
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid refresh token payload.")
+
+    token_hash = _hash_token(body.refresh_token)
+    if not get_active_refresh_token(token_hash):
+        raise HTTPException(status_code=401, detail="Refresh token revoked or expired.")
+    revoke_refresh_token(token_hash)
+
+    user = get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Account no longer exists.")
+    return _issue_tokens(user["id"], user["email"], user["name"] or "")
+
+
+@router.post("/auth/logout")
+def logout(body: RefreshBody, user_id: str = Depends(get_current_user_id)):
+    """Revoke the refresh token. Access token will still work until it expires (max 1h)."""
+    revoke_refresh_token(_hash_token(body.refresh_token))
+    return {"ok": True}

@@ -1,132 +1,134 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
 import {
-  LayoutDashboard, Search, BrainCircuit, BookOpen,
-  CalendarDays, NotebookPen, Timer, Settings,
-  LogOut,
+  Activity, Search, BrainCircuit, BookOpen,
+  CalendarDays, Timer, Settings, LogOut, Gauge,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const navGroups = [
   {
-    label: 'Workspace',
+    label: 'Recall loop',
     items: [
-      { to: '/',        label: 'Dashboard',  icon: LayoutDashboard, exact: true },
-      { to: '/search',  label: 'Search',     icon: Search },
-      { to: '/library', label: 'Library',    icon: BookOpen },
-    ],
-  },
-  {
-    label: 'Learn',
-    items: [
-      { to: '/quiz',    label: 'Quiz Mode',  icon: BrainCircuit },
+      { to: '/',         label: 'Health',   icon: Activity, exact: true },
+      { to: '/search',   label: 'Discover', icon: Search },
+      { to: '/library',  label: 'Library',  icon: BookOpen },
+      { to: '/quiz',     label: 'Practice', icon: BrainCircuit },
     ],
   },
   {
     label: 'Tools',
     items: [
-      { to: '/notes',    label: 'Note Editor', icon: NotebookPen },
-      { to: '/pomodoro', label: 'Pomodoro',    icon: Timer },
-      { to: '/calendar', label: 'Calendar',    icon: CalendarDays },
+      { to: '/calendar', label: 'Calendar', icon: CalendarDays },
+      { to: '/pomodoro', label: 'Focus',    icon: Timer },
     ],
   },
 ];
 
-export function Sidebar() {
+/** One-row account control: avatar + name (left) + Settings + Logout icons (right).
+ *  Always pinned at the bottom of the sidebar regardless of page scroll. */
+function AccountRow() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onClick(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [menuOpen]);
 
   return (
-    <aside
-      className="hidden md:flex flex-col w-52 shrink-0 min-h-[calc(100vh-49px)]"
-      style={{
-        background: '#0f0f0f',
-        borderRight: '1px solid #1a1a1a',
-      }}
-    >
-      <div className="flex flex-col flex-1 p-2 gap-4 overflow-y-auto">
-        {navGroups.map(group => (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setMenuOpen((v) => !v)}
+        className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
+      >
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent-soft)] font-bold text-[var(--accent)]">
+          {(user?.name?.[0] ?? 'D').toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-[var(--text-1)]">{user?.name ?? 'Demo User'}</p>
+          <p className="truncate text-xs text-[var(--text-3)]">{user?.email ?? 'demo@dory.md'}</p>
+        </div>
+      </button>
+
+      {menuOpen && (
+        <div className="absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-lg overflow-hidden">
+          <button
+            type="button"
+            onClick={() => { setMenuOpen(false); navigate('/settings'); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-[var(--text-1)] hover:bg-[var(--surface-2)]"
+          >
+            <Settings size={15} className="text-[var(--text-3)]" /> Settings
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMenuOpen(false); void logout(); }}
+            className="flex w-full items-center gap-2 border-t border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-1)] hover:bg-[var(--surface-2)]"
+          >
+            <LogOut size={15} className="text-[var(--text-3)]" /> Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Sidebar() {
+  return (
+    <aside className="hidden w-60 shrink-0 border-r border-[var(--border)] bg-[rgba(255,253,248,0.62)] px-3 py-4 md:flex md:flex-col">
+      {/* AppShell gives this aside a fixed viewport-minus-header height; the nav scrolls inside, the AccountRow stays pinned. */}
+      <div className="flex-1 space-y-5 overflow-y-auto">
+        {navGroups.map((group) => (
           <div key={group.label}>
-            <p
-              className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest select-none"
-              style={{ color: '#3a3a3a' }}
-            >
-              {group.label}
-            </p>
-            <nav className="space-y-0.5">
+            <p className="app-label mb-2 px-2">{group.label}</p>
+            <nav className="space-y-1">
               {group.items.map(({ to, label, icon: Icon, exact }) => (
                 <NavLink
                   key={to}
                   to={to}
                   end={exact}
-                  className={({ isActive }) =>
-                    [
-                      'flex items-center gap-2.5 px-2 py-1.5 rounded-md text-[13px] font-medium transition-colors duration-100',
-                      isActive
-                        ? 'text-white'
-                        : 'text-[#555] hover:text-[#ccc] hover:bg-white/[0.04]',
-                    ].join(' ')
-                  }
-                  style={({ isActive }) =>
-                    isActive
-                      ? { background: '#1f1f1f', color: '#fff' }
-                      : {}
-                  }
+                  className={({ isActive }) => (isActive ? 'nav-item-active' : 'nav-item')}
                 >
-                  {({ isActive }) => (
-                    <>
-                      <Icon
-                        size={14}
-                        style={{ color: isActive ? '#7c3aed' : undefined, flexShrink: 0 }}
-                      />
-                      {label}
-                    </>
-                  )}
+                  <Icon size={17} />
+                  <span>{label}</span>
                 </NavLink>
               ))}
             </nav>
           </div>
         ))}
+
+        <div className="app-card-muted p-3">
+          <div className="mb-2 flex items-center gap-2 text-sm font-bold text-[var(--text-1)]">
+            <Gauge size={16} className="text-[var(--accent)]" />
+            Daily loop
+          </div>
+          <div className="space-y-2 text-xs text-[var(--text-2)]">
+            <div className="flex items-center justify-between">
+              <span>Capture</span>
+              <span className="font-bold text-[var(--good)]">ready</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Review</span>
+              <span className="font-bold text-[var(--warn)]">queued</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Practice</span>
+              <span className="font-bold text-[var(--accent)]">adaptive</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Footer */}
-      <div className="p-2 border-t" style={{ borderColor: '#1a1a1a' }}>
-        <NavLink
-          to="/settings"
-          className={({ isActive }) =>
-            [
-              'flex items-center gap-2.5 px-2 py-1.5 rounded-md text-[13px] font-medium transition-colors mb-0.5',
-              isActive ? 'text-white' : 'text-[#555] hover:text-[#ccc] hover:bg-white/[0.04]',
-            ].join(' ')
-          }
-          style={({ isActive }) => isActive ? { background: '#1f1f1f' } : {}}
-        >
-          <Settings size={14} style={{ flexShrink: 0 }} />
-          Settings
-        </NavLink>
-
-        <div
-          className="flex items-center gap-2.5 px-2 py-1.5 rounded-md"
-          style={{ marginTop: '4px' }}
-        >
-          <div
-            className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
-            style={{ background: '#7c3aed', color: '#fff' }}
-          >
-            {(user?.name?.[0] ?? 'D').toUpperCase()}
-          </div>
-          <span className="flex-1 text-[12px] truncate" style={{ color: '#555' }}>
-            {user?.name ?? 'Demo User'}
-          </span>
-          <button
-            onClick={logout}
-            className="transition-colors"
-            style={{ color: '#333' }}
-            title="Sign out"
-            onMouseEnter={e => (e.currentTarget.style.color = '#666')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#333')}
-          >
-            <LogOut size={13} />
-          </button>
-        </div>
+      {/* Account row pinned at the bottom — single row, click to reveal Settings/Sign out */}
+      <div className="mt-3 border-t border-[var(--border)] pt-3">
+        <AccountRow />
       </div>
     </aside>
   );

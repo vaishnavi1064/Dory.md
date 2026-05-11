@@ -11,7 +11,6 @@ import { NoteEditorPage } from '@/pages/NoteEditorPage';
 import { PomodoroPage } from '@/pages/PomodoroPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { ThemeProvider } from '@/contexts/ThemeContext';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
 const pageVariants = {
@@ -46,11 +45,11 @@ function AnimatedRoutes() {
                     <Route path="/calendar" element={<CalendarPage />} />
                     <Route path="/notes"    element={<NoteEditorPage />} />
                     <Route path="/pomodoro" element={<PomodoroPage />} />
-                    <Route path="/notion"   element={<Navigate to="/settings" replace />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="*" element={
-                      <div className="gcard p-10 text-center">
-                        <p className="text-slate-400">Page not found</p>
+                      <div className="app-card p-10 text-center">
+                        <p className="font-bold text-[var(--text-1)]">Page not found</p>
+                        <p className="mt-1 text-sm text-[var(--text-3)]">Use the sidebar to return to a Dory workspace.</p>
                       </div>
                     } />
                   </Routes>
@@ -66,10 +65,8 @@ function AnimatedRoutes() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <AnimatedRoutes />
-      </AuthProvider>
-    </ThemeProvider>
+    <AuthProvider>
+      <AnimatedRoutes />
+    </AuthProvider>
   );
 }

@@ -1,8 +1,8 @@
 import { config } from './config';
+import { clearTokens, getAccessToken, refreshAccessToken } from './tokens';
 import type {
   Chunk,
   ChunkDetail,
-  HealthResponse,
   DiscoveryResponse,
   SearchResponse,
   QuizSession,
@@ -10,30 +10,44 @@ import type {
   QuizResults,
   IngestResponse,
   FileIngestResponse,
-  NotionStatus,
-  NotionPage,
-  NotionConnectResponse,
-  NotionImportResponse,
   FadingResponse,
   ChunksResponse,
   StatsResponse,
 } from './types';
 
-import mockHealth from '@/data/mock_health.json';
 import mockChunks from '@/data/mock_chunks.json';
 import mockSearchResults from '@/data/mock_search_results.json';
 import mockDiscovery from '@/data/mock_discovery.json';
 import mockQuiz from '@/data/mock_quiz.json';
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('dory-token');
-  const res = await fetch(`${config.apiBaseUrl}${path}`, {
+async function doFetch(path: string, init: RequestInit | undefined, token: string | null): Promise<Response> {
+  return fetch(`${config.apiBaseUrl}${path}`, {
+    ...init,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers ?? {}),
     },
-    ...init,
   });
+}
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  let token = getAccessToken();
+  let res = await doFetch(path, init, token);
+
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      res = await doFetch(path, init, newToken);
+    } else {
+      clearTokens();
+      // Bounce to login. Use replace so the dead session isn't in history.
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.replace('/login');
+      }
+    }
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`API ${res.status}: ${text}`);
@@ -43,30 +57,6 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-export async function getHealth(timeOffsetHours = 0): Promise<HealthResponse> {
-  if (config.useMocks) {
-    await sleep(300);
-    const base = mockHealth as HealthResponse;
-    if (timeOffsetHours === 0) return base;
-    const decay = Math.exp(-timeOffsetHours / 240);
-    return {
-      ...base,
-      time_offset_hours: timeOffsetHours,
-      categories: base.categories.map((c) => ({
-        ...c,
-        avg_retention: Math.max(0.02, c.avg_retention * decay),
-        urgency:
-          c.avg_retention * decay >= 0.7
-            ? 'low'
-            : c.avg_retention * decay >= 0.4
-            ? 'medium'
-            : 'high',
-      })),
-    };
-  }
-  return apiFetch<HealthResponse>(`/api/health?time_offset_hours=${timeOffsetHours}`);
 }
 
 export async function getDiscovery(): Promise<DiscoveryResponse> {
@@ -176,39 +166,26 @@ export async function getSearchResults(query: string): Promise<SearchResponse> {
 export async function ingestFile(file: File): Promise<FileIngestResponse> {
   const form = new FormData();
   form.append('files', file);
-  const token = localStorage.getItem('dory-token');
-  const res = await fetch(`${config.apiBaseUrl}/api/ingest`, {
-    method: 'POST',
-    body: form,
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+
+  const send = async (tok: string | null) => {
+    return fetch(`${config.apiBaseUrl}/api/ingest`, {
+      method: 'POST',
+      body: form,
+      headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+    });
+  };
+
+  let token = getAccessToken();
+  let res = await send(token);
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) res = await send(newToken);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`API ${res.status}: ${text}`);
   }
   return res.json() as Promise<FileIngestResponse>;
-}
-
-export async function notionStatus(): Promise<NotionStatus> {
-  return apiFetch<NotionStatus>('/api/notion/status');
-}
-
-export async function notionConnect(token: string): Promise<NotionConnectResponse> {
-  return apiFetch<NotionConnectResponse>('/api/notion/connect', {
-    method: 'POST',
-    body: JSON.stringify({ token }),
-  });
-}
-
-export async function listNotionPages(): Promise<NotionPage[]> {
-  return apiFetch<NotionPage[]>('/api/notion/pages');
-}
-
-export async function importNotionPages(pageIds: string[]): Promise<NotionImportResponse> {
-  return apiFetch<NotionImportResponse>('/api/notion/import', {
-    method: 'POST',
-    body: JSON.stringify({ page_ids: pageIds }),
-  });
 }
 
 export async function getChunkDetail(chunkId: string): Promise<ChunkDetail> {
@@ -267,15 +244,4 @@ export async function aiOptimize(original: string, expanded: string): Promise<st
     body: JSON.stringify({ original, expanded }),
   });
   return r.optimized;
-}
-
-export async function createNotionPage(params: {
-  title: string;
-  content: string;
-  parent_id: string;
-}): Promise<{ page_id: string; url: string; chunks_indexed: number }> {
-  return apiFetch('/api/notion/create', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
 }

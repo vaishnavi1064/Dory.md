@@ -48,3 +48,5 @@ lecture pdf.zip
 test_groq_key.py
 demo_chunks.json
 *.extracted.txt
+frontend/.vite/
+backend/.testvenv/

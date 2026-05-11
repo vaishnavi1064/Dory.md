@@ -1,16 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
-import { BookOpen, Loader2, FolderPlus, FolderOpen, Check, ChevronRight, Lock, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
+import {
+  BookOpen, Loader2, FolderPlus, FolderOpen, Check, Trash2,
+  Filter, ArrowDownAZ, Lock, Search, NotebookPen,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getAllChunks, bulkDeleteChunks, getFolders } from '@/lib/api';
+import { getAllChunks, bulkDeleteChunks, getFolders, moveChunkToFolder } from '@/lib/api';
 import { NoteDetailPanel, type PanelChunk } from '@/components/notes/NoteDetailPanel';
 import type { BackendChunk, Category } from '@/lib/types';
-import { categoryColors, retentionToColor } from '@/styles/theme';
+import { categoryColors, retentionToColor, retentionToLabel } from '@/styles/theme';
 import { formatRetentionPct } from '@/lib/utils';
 
 const ENC_PREFIX = 'ENC:';
 const ALL_CATEGORIES: Category[] = ['technical', 'personal', 'reference', 'general'];
 
-interface LibraryChunk extends BackendChunk { folder?: string | null; }
+interface LibraryChunk extends BackendChunk {
+  folder?: string | null;
+}
 
 function toPanel(c: LibraryChunk): PanelChunk {
   return {
@@ -25,9 +31,20 @@ function toPanel(c: LibraryChunk): PanelChunk {
   };
 }
 
-function baseName(path: string) { return path.split(/[\\/]/).pop() ?? path; }
+function baseName(path: string) {
+  return path.split(/[\\/]/).pop() ?? path;
+}
+
+function normalizedCategory(category?: string | null): Category {
+  const cat = (category ?? '').toLowerCase();
+  if (cat.includes('technical') || cat.includes('code') || cat.includes('algorithm') || cat.includes('data')) return 'technical';
+  if (cat.includes('personal')) return 'personal';
+  if (cat.includes('reference')) return 'reference';
+  return 'general';
+}
 
 export function LibraryPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [chunks, setChunks] = useState<LibraryChunk[]>([]);
   const [loading, setLoading] = useState(true);
   const [folders, setFolders] = useState<string[]>([]);
@@ -35,274 +52,305 @@ export function LibraryPage() {
   const [filterCat, setFilterCat] = useState<Category | 'all'>('all');
   const [sortBy, setSortBy] = useState<'retention' | 'recent' | 'access'>('retention');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [activeChunkId, setActiveChunkId] = useState<string | null>(null);
-  const [showNewFolder, setShowNewFolder] = useState(false);
+  const [activeChunkId, setActiveChunkId] = useState<string | null>(searchParams.get('chunk'));
   const [newFolderName, setNewFolderName] = useState('');
-  const [showBulkMoveMenu, setShowBulkMoveMenu] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, f] = await Promise.all([getAllChunks(), getFolders()]);
-      setChunks(r.chunks.map(c => ({ ...c, folder: (c as LibraryChunk).folder ?? null })));
-      setFolders(f);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+      const [chunkRes, folderRes] = await Promise.all([getAllChunks(), getFolders().catch(() => [])]);
+      setChunks(chunkRes.chunks.map((c) => ({ ...c, folder: (c as LibraryChunk).folder ?? null })));
+      setFolders(folderRes);
+    } catch {
+      setChunks([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
 
-  const activeChunk = chunks.find(c => c.chunk_id === activeChunkId) ?? null;
+  // Sync URL ?chunk=<id> ↔ activeChunkId so deep-links from the dashboard work
+  // and the URL updates when the user clicks a chunk in this page.
+  useEffect(() => {
+    const fromUrl = searchParams.get('chunk');
+    if (fromUrl && fromUrl !== activeChunkId) setActiveChunkId(fromUrl);
+  }, [searchParams]);
 
-  const visible = chunks
-    .filter(c => {
-      if (activeFolder !== null && (c.folder ?? null) !== activeFolder) return false;
-      if (filterCat !== 'all') {
-        const cat = (c.category ?? '').toLowerCase();
-        const mapped = cat.includes('technical') || cat.includes('code') || cat.includes('algorithm') || cat.includes('data')
-          ? 'technical' : cat.includes('personal') ? 'personal' : cat.includes('reference') ? 'reference' : 'general';
-        if (mapped !== filterCat) return false;
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'retention') return (a.retention ?? 0) - (b.retention ?? 0);
-      if (sortBy === 'recent') return new Date(b.last_accessed_iso).getTime() - new Date(a.last_accessed_iso).getTime();
-      return b.access_count - a.access_count;
-    });
+  useEffect(() => {
+    const fromUrl = searchParams.get('chunk');
+    if (activeChunkId && activeChunkId !== fromUrl) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('chunk', activeChunkId);
+        return next;
+      }, { replace: true });
+    } else if (!activeChunkId && fromUrl) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('chunk');
+        return next;
+      }, { replace: true });
+    }
+  }, [activeChunkId]);
+
+  const activeChunk = chunks.find((c) => c.chunk_id === activeChunkId) ?? null;
+
+  const visible = useMemo(() => {
+    return chunks
+      .filter((chunk) => {
+        if (activeFolder !== null && (chunk.folder ?? null) !== activeFolder) return false;
+        if (filterCat !== 'all' && normalizedCategory(chunk.category) !== filterCat) return false;
+        if (searchTerm.trim()) {
+          const q = searchTerm.toLowerCase();
+          return chunk.content.toLowerCase().includes(q) || chunk.source_file.toLowerCase().includes(q) || (chunk.folder ?? '').toLowerCase().includes(q);
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'retention') return (a.retention ?? 0) - (b.retention ?? 0);
+        if (sortBy === 'recent') return new Date(b.last_accessed_iso).getTime() - new Date(a.last_accessed_iso).getTime();
+        return b.access_count - a.access_count;
+      });
+  }, [chunks, activeFolder, filterCat, searchTerm, sortBy]);
 
   function toggleSelect(id: string) {
-    setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
+
   function selectAll() {
-    const ids = visible.map(c => c.chunk_id);
-    setSelected(prev => prev.size === ids.length ? new Set() : new Set(ids));
+    setSelected((prev) => prev.size === visible.length ? new Set() : new Set(visible.map((c) => c.chunk_id)));
   }
 
   async function doBulkDelete() {
     const ids = [...selected];
     await bulkDeleteChunks(ids);
-    setChunks(prev => prev.filter(c => !ids.includes(c.chunk_id)));
+    setChunks((prev) => prev.filter((c) => !ids.includes(c.chunk_id)));
     setSelected(new Set());
     setConfirmBulkDelete(false);
     if (activeChunkId && ids.includes(activeChunkId)) setActiveChunkId(null);
-    await getFolders().then(setFolders);
+    getFolders().then(setFolders).catch(() => {});
   }
 
-  async function createFolder() {
+  async function moveSelected(folder: string | null) {
+    const ids = [...selected];
+    await Promise.all(ids.map((id) => moveChunkToFolder(id, folder)));
+    setChunks((prev) => prev.map((c) => selected.has(c.chunk_id) ? { ...c, folder } : c));
+    setSelected(new Set());
+    getFolders().then(setFolders).catch(() => {});
+  }
+
+  function createFolder() {
     const name = newFolderName.trim();
     if (!name) return;
-    if (!folders.includes(name)) setFolders(prev => [...prev, name].sort());
-    setNewFolderName(''); setShowNewFolder(false);
+    setFolders((prev) => Array.from(new Set([...prev, name])).sort());
+    setNewFolderName('');
   }
 
   return (
-    <div className="flex -mx-6 -my-5 border-t" style={{ height: 'calc(100vh - 110px)', borderColor: '#1f1f1f' }}>
-
-      {/* ── LEFT PANEL ────────────────────────────────────────────────────── */}
-      <div className="flex flex-col border-r" style={{ width: 380, minWidth: 280, borderColor: '#1f1f1f' }}>
-
-        {/* Header */}
-        <div className="px-4 pt-4 pb-3 shrink-0" style={{ borderBottom: '1px solid #1f1f1f' }}>
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="text-base font-semibold text-white">Library</h1>
-            <button onClick={() => setShowNewFolder(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-slate-400 hover:text-white hover:bg-[#1c1c1c] transition-all border border-[#252525]">
-              <FolderPlus size={11} /> New folder
-            </button>
+    <div className="grid min-h-[calc(100vh-132px)] gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+      <section className="app-card flex min-h-[620px] flex-col overflow-hidden">
+        <div className="border-b border-[var(--border)] p-4">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-extrabold text-[var(--text-1)]">Library</h1>
+              <p className="mt-1 text-sm text-[var(--text-3)]">Browse, edit, and write notes. {chunks.length} chunk{chunks.length === 1 ? '' : 's'}.</p>
+            </div>
+            <Link to="/notes" className="btn-primary text-sm shrink-0">
+              <NotebookPen size={14} /> New note
+            </Link>
           </div>
 
-          {/* Folder tabs */}
-          <div className="flex gap-1.5 flex-wrap mb-3">
-            <button onClick={() => setActiveFolder(null)}
-              className={cn('px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all',
-                activeFolder === null ? 'bg-nebula-500/20 border-nebula-500/40 text-nebula-300' : 'border-[#252525] text-slate-500 hover:text-slate-300 hover:bg-[#1c1c1c]')}>
-              All ({chunks.length})
+          <div className="relative mb-3">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-3)]" />
+            <input
+              className="corp-input pl-9"
+              placeholder="Filter files, folders, or content..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <div className="mb-3 flex flex-wrap gap-2">
+            <button type="button" onClick={() => setActiveFolder(null)} className={cn('btn-ghost', activeFolder === null && 'bg-[var(--accent-soft)] text-[var(--accent)]')}>
+              All folders
             </button>
-            {folders.map(f => (
-              <button key={f} onClick={() => setActiveFolder(f)}
-                className={cn('px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all flex items-center gap-1',
-                  activeFolder === f ? 'bg-nebula-500/20 border-nebula-500/40 text-nebula-300' : 'border-[#252525] text-slate-500 hover:text-slate-300 hover:bg-[#1c1c1c]')}>
-                <FolderOpen size={10} /> {f}
+            {folders.map((folder) => (
+              <button
+                key={folder}
+                type="button"
+                onClick={() => setActiveFolder(folder)}
+                className={cn('btn-ghost', activeFolder === folder && 'bg-[var(--accent-soft)] text-[var(--accent)]')}
+              >
+                <FolderOpen size={14} /> {folder}
               </button>
             ))}
           </div>
 
-          {/* Filter + sort */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex gap-1 flex-wrap flex-1">
-              <button onClick={() => setFilterCat('all')}
-                className={cn('px-2 py-1 rounded text-[10px] font-medium border transition-all',
-                  filterCat === 'all' ? 'bg-[#252525] border-[#333] text-slate-200' : 'border-[#1f1f1f] text-slate-600 hover:text-slate-400')}>All</button>
-              {ALL_CATEGORIES.map(cat => (
-                <button key={cat} onClick={() => setFilterCat(cat)}
-                  className="px-2 py-1 rounded text-[10px] font-medium border transition-all capitalize"
-                  style={filterCat === cat
-                    ? { color: categoryColors[cat], borderColor: `${categoryColors[cat]}50`, background: `${categoryColors[cat]}15` }
-                    : { color: '#64748b', borderColor: '#1f1f1f' }}>
-                  {cat}
-                </button>
-              ))}
-            </div>
-            <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)}
-              className="text-[10px] text-slate-500 rounded px-1.5 py-1 outline-none"
-              style={{ background: '#161616', border: '1px solid #252525' }}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-xs font-bold text-[var(--text-3)]"><Filter size={13} /> Category</span>
+            <button type="button" onClick={() => setFilterCat('all')} className={cn('tag', filterCat === 'all' && 'border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]')}>All</button>
+            {ALL_CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setFilterCat(cat)}
+                className="tag capitalize"
+                style={filterCat === cat ? { color: categoryColors[cat], borderColor: `${categoryColors[cat]}55`, background: `${categoryColors[cat]}16` } : undefined}
+              >
+                {cat}
+              </button>
+            ))}
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="corp-input ml-auto w-auto min-w-[150px]">
               <option value="retention">Fading first</option>
-              <option value="recent">Recent</option>
-              <option value="access">Most accessed</option>
+              <option value="recent">Recently accessed</option>
+              <option value="access">Most reviewed</option>
             </select>
           </div>
         </div>
 
-        {/* Bulk action bar */}
-        {selected.size > 0 && (
-          <div className="px-4 py-2 flex items-center gap-2 shrink-0" style={{ borderBottom: '1px solid #1f1f1f', background: '#111' }}>
-            <span className="text-[11px] text-slate-400 flex-1">{selected.size} selected</span>
-            <div className="relative">
-              <button onClick={() => setShowBulkMoveMenu(v => !v)}
-                className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-slate-400 hover:text-white hover:bg-[#1c1c1c] border border-[#252525] transition-all">
-                <FolderOpen size={10} /> Move
+        <div className="border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+          {selected.size > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-auto text-sm font-bold text-[var(--text-1)]">{selected.size} selected</span>
+              <button type="button" className="btn-secondary" onClick={() => moveSelected(null)}>
+                <FolderOpen size={14} /> No folder
               </button>
-              {showBulkMoveMenu && (
-                <div className="absolute left-0 top-7 z-20 rounded-lg border border-[#252525] shadow-xl py-1 min-w-[140px]" style={{ background: '#161616' }}>
-                  <button onClick={async () => { await Promise.all([...selected].map(id => import('@/lib/api').then(m => m.moveChunkToFolder(id, null)))); setChunks(prev => prev.map(c => selected.has(c.chunk_id) ? { ...c, folder: null } : c)); setShowBulkMoveMenu(false); getFolders().then(setFolders); }}
-                    className="w-full text-left px-3 py-1.5 text-[11px] text-slate-400 hover:text-white hover:bg-[#1c1c1c] transition-colors">
-                    Remove from folder
-                  </button>
-                  {folders.map(f => (
-                    <button key={f} onClick={async () => { await Promise.all([...selected].map(id => import('@/lib/api').then(m => m.moveChunkToFolder(id, f)))); setChunks(prev => prev.map(c => selected.has(c.chunk_id) ? { ...c, folder: f } : c)); setShowBulkMoveMenu(false); getFolders().then(setFolders); }}
-                      className="w-full text-left px-3 py-1.5 text-[11px] text-slate-400 hover:text-white hover:bg-[#1c1c1c] transition-colors flex items-center gap-1.5">
-                      <FolderOpen size={9} /> {f}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {folders.slice(0, 3).map((folder) => (
+                <button key={folder} type="button" className="btn-secondary" onClick={() => moveSelected(folder)}>
+                  <FolderOpen size={14} /> {folder}
+                </button>
+              ))}
+              <button type="button" className="btn-secondary text-[var(--danger)]" onClick={() => setConfirmBulkDelete(true)}>
+                <Trash2 size={14} /> Delete
+              </button>
             </div>
-            <button onClick={() => setConfirmBulkDelete(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 transition-all">
-              <Trash2 size={10} /> Delete
-            </button>
-          </div>
-        )}
-
-        {/* Select all */}
-        <div className="px-4 py-2 flex items-center gap-2 shrink-0" style={{ borderBottom: '1px solid #1a1a1a' }}>
-          <button onClick={selectAll} className="flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-slate-400 transition-colors">
-            <div className={cn('w-3.5 h-3.5 rounded border flex items-center justify-center transition-all',
-              selected.size > 0 && selected.size === visible.length ? 'bg-nebula-500 border-nebula-500' : 'border-[#333]')}>
-              {selected.size > 0 && selected.size === visible.length && <Check size={9} className="text-white" />}
+          ) : (
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={selectAll} className="btn-ghost">
+                <Check size={14} /> Select visible
+              </button>
+              <div className="ml-auto flex items-center gap-2">
+                <input
+                  className="corp-input h-9 w-36"
+                  placeholder="New folder"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') createFolder(); }}
+                />
+                <button type="button" className="btn-secondary h-9" onClick={createFolder}>
+                  <FolderPlus size={14} />
+                </button>
+              </div>
             </div>
-            Select all
-          </button>
-          <span className="text-[10px] text-slate-700 ml-auto">{visible.length} notes</span>
+          )}
         </div>
 
-        {/* Chunk list */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-16"><Loader2 size={18} className="animate-spin text-slate-700" /></div>
+            <div className="flex items-center justify-center py-16"><Loader2 size={22} className="animate-spin text-[var(--accent)]" /></div>
           ) : visible.length === 0 ? (
-            <div className="p-8 text-center">
-              <BookOpen size={24} className="text-slate-800 mx-auto mb-3" />
-              <p className="text-[12px] text-slate-600">{chunks.length === 0 ? 'No notes yet — import files to get started.' : 'No notes in this view.'}</p>
+            <div className="p-10 text-center text-[var(--text-3)]">
+              <BookOpen size={30} className="mx-auto mb-3" />
+              <p className="font-bold text-[var(--text-1)]">{chunks.length === 0 ? 'No chunks yet' : 'No chunks in this view'}</p>
+              <p className="mt-1 text-sm">Import files or clear filters to populate the library.</p>
             </div>
-          ) : visible.map(chunk => {
+          ) : visible.map((chunk) => {
             const retention = chunk.retention ?? 0.5;
             const color = retentionToColor(retention);
+            const category = normalizedCategory(chunk.category);
             const isActive = activeChunkId === chunk.chunk_id;
             const isSelected = selected.has(chunk.chunk_id);
-            const isEnc = chunk.content.startsWith(ENC_PREFIX) || chunk.content === '[Encrypted]';
+            const isEncrypted = chunk.content.startsWith(ENC_PREFIX) || chunk.content === '[Encrypted]';
             return (
-              <div key={chunk.chunk_id} onClick={() => setActiveChunkId(chunk.chunk_id)}
-                className={cn('flex items-start gap-2.5 px-4 py-3 cursor-pointer border-b transition-all', isActive ? 'bg-[#161616]' : 'hover:bg-[#111]')}
-                style={{ borderColor: '#141414' }}>
-                {/* Checkbox */}
-                <div onClick={e => { e.stopPropagation(); toggleSelect(chunk.chunk_id); }}
-                  className={cn('mt-0.5 w-3.5 h-3.5 rounded border shrink-0 flex items-center justify-center transition-all cursor-pointer',
-                    isSelected ? 'bg-nebula-500 border-nebula-500' : 'border-[#333] hover:border-[#555]')}>
-                  {isSelected && <Check size={9} className="text-white" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-[10px] font-mono text-slate-500 truncate flex-1">{baseName(chunk.source_file)}</span>
-                    {isEnc && <Lock size={9} className="text-amber-500 shrink-0" />}
-                    <span className="text-[10px] font-mono shrink-0" style={{ color }}>{formatRetentionPct(retention)}</span>
+              <button
+                key={chunk.chunk_id}
+                type="button"
+                onClick={() => setActiveChunkId(chunk.chunk_id)}
+                className={cn(
+                  'block w-full border-b border-[var(--border)] p-4 text-left transition',
+                  isActive ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--surface-2)]'
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <span
+                    onClick={(e) => { e.stopPropagation(); toggleSelect(chunk.chunk_id); }}
+                    className={cn(
+                      'mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded border',
+                      isSelected ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-[var(--border-strong)] bg-[var(--surface)]'
+                    )}
+                  >
+                    {isSelected && <Check size={11} />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="truncate text-sm font-bold text-[var(--text-1)]">{baseName(chunk.source_file)}</span>
+                      {isEncrypted && <Lock size={13} className="shrink-0 text-[var(--warn)]" />}
+                      <span className="ml-auto text-xs font-bold" style={{ color }}>{formatRetentionPct(retention)}</span>
+                    </div>
+                    <p className="line-clamp-2 text-sm leading-relaxed text-[var(--text-2)]">
+                      {isEncrypted ? 'Encrypted note' : chunk.content}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="tag capitalize" style={{ color: categoryColors[category], borderColor: `${categoryColors[category]}44`, background: `${categoryColors[category]}14` }}>
+                        {category}
+                      </span>
+                      <span className="tag" style={{ color, borderColor: `${color}44`, background: `${color}14` }}>
+                        {retentionToLabel(retention)}
+                      </span>
+                      {chunk.folder && <span className="tag"><FolderOpen size={12} /> {chunk.folder}</span>}
+                      <span className="text-xs text-[var(--text-3)]">{chunk.last_accessed}</span>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
-                    {isEnc ? '🔒 Encrypted note' : chunk.content}
-                  </p>
-                  <div className="flex items-center gap-3 mt-1.5">
-                    <span className="text-[9px] text-slate-700">{chunk.last_accessed}</span>
-                    {chunk.folder && <span className="text-[9px] text-slate-700 flex items-center gap-0.5"><FolderOpen size={8} />{chunk.folder}</span>}
-                  </div>
                 </div>
-                {isActive && <ChevronRight size={12} className="text-nebula-400 shrink-0 mt-1" />}
-              </div>
+              </button>
             );
           })}
         </div>
-      </div>
+      </section>
 
-      {/* ── RIGHT PANEL ───────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-hidden" style={{ background: '#0a0a0a' }}>
+      <section className="app-card min-h-[620px] overflow-hidden">
         {activeChunk ? (
           <NoteDetailPanel
             chunk={toPanel(activeChunk)}
             folders={folders}
             onDelete={(id) => {
-              setChunks(prev => prev.filter(c => c.chunk_id !== id));
+              setChunks((prev) => prev.filter((c) => c.chunk_id !== id));
               setActiveChunkId(null);
-              getFolders().then(setFolders);
+              getFolders().then(setFolders).catch(() => {});
             }}
             onContentUpdate={(id, content) => {
-              setChunks(prev => prev.map(c => c.chunk_id === id ? { ...c, content: content.slice(0, 300) } : c));
+              setChunks((prev) => prev.map((c) => c.chunk_id === id ? { ...c, content: content.slice(0, 300) } : c));
             }}
             onFolderChange={(id, folder) => {
-              setChunks(prev => prev.map(c => c.chunk_id === id ? { ...c, folder } : c));
-              getFolders().then(setFolders);
+              setChunks((prev) => prev.map((c) => c.chunk_id === id ? { ...c, folder } : c));
+              getFolders().then(setFolders).catch(() => {});
             }}
           />
         ) : (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
-            <BookOpen size={32} className="text-slate-800" />
-            <p className="text-sm text-slate-600">Select a note to view, edit, or analyze it</p>
-            <p className="text-xs text-slate-700">AI summarize · go deeper · optimize note · encrypt</p>
+          <div className="flex h-full min-h-[620px] flex-col items-center justify-center gap-3 px-8 text-center">
+            <ArrowDownAZ size={34} className="text-[var(--text-4)]" />
+            <p className="font-bold text-[var(--text-1)]">Select a chunk</p>
+            <p className="max-w-sm text-sm text-[var(--text-3)]">Edit content, move folders, run AI transforms, or encrypt sensitive notes.</p>
           </div>
         )}
-      </div>
-
-      {/* ── Modals ─────────────────────────────────────────────────────────── */}
-
-      {showNewFolder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="gcard w-full max-w-sm p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-white">Create folder</h3>
-            <input autoFocus value={newFolderName} onChange={e => setNewFolderName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') createFolder(); if (e.key === 'Escape') setShowNewFolder(false); }}
-              placeholder="Folder name…"
-              className="w-full text-sm text-white rounded-lg px-3 py-2 outline-none"
-              style={{ background: '#161616', border: '1px solid #252525' }} />
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => { setShowNewFolder(false); setNewFolderName(''); }} className="btn-secondary text-xs">Cancel</button>
-              <button onClick={createFolder} disabled={!newFolderName.trim()} className="btn-primary text-xs">Create</button>
-            </div>
-          </div>
-        </div>
-      )}
+      </section>
 
       {confirmBulkDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="gcard w-full max-w-sm p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-white">Delete {selected.size} notes?</h3>
-            <p className="text-xs text-slate-500">This permanently removes them from your knowledge base.</p>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setConfirmBulkDelete(false)} className="btn-secondary text-xs">Cancel</button>
-              <button onClick={doBulkDelete}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium"
-                style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
-                Delete
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
+          <div className="app-card w-full max-w-sm p-5 shadow-[var(--shadow)]">
+            <h3 className="font-bold text-[var(--text-1)]">Delete {selected.size} chunks?</h3>
+            <p className="mt-2 text-sm text-[var(--text-3)]">This permanently removes them from your knowledge base.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setConfirmBulkDelete(false)}>Cancel</button>
+              <button type="button" className="btn-primary bg-[var(--danger)] hover:bg-[var(--danger)]" onClick={doBulkDelete}>Delete</button>
             </div>
           </div>
         </div>

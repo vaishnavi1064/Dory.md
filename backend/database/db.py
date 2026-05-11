@@ -1,22 +1,31 @@
 import os
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-DB_PATH = Path(__file__).parent.parent / "data" / "dory.db"
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
 DEFAULT_USER_ID = "default"
 
 
+def _db_path() -> Path:
+    """Resolve the SQLite path. Tests set DORY_DB_PATH to a temp file."""
+    override = os.getenv("DORY_DB_PATH")
+    if override:
+        return Path(override)
+    return Path(__file__).parent.parent / "data" / "dory.db"
+
+
 def _connect() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+    path = _db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path), check_same_thread=False, timeout=5.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -61,6 +70,13 @@ def get_user_by_email(email: str) -> Optional[sqlite3.Row]:
     return row
 
 
+def get_user_by_id(user_id: str) -> Optional[sqlite3.Row]:
+    conn = _connect()
+    row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    conn.close()
+    return row
+
+
 def create_user(email: str, name: str, password_hash: str) -> str:
     user_id = str(uuid.uuid4())
     conn = _connect()
@@ -94,7 +110,7 @@ def insert_chunk(
     access_count: int = 0,
 ) -> str:
     chunk_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     conn = _connect()
     conn.execute(
         """INSERT INTO chunks
@@ -107,8 +123,8 @@ def insert_chunk(
             source_file,
             content,
             complexity_score,
-            (created_at or datetime.utcnow()).isoformat(),
-            (last_accessed or datetime.utcnow()).isoformat(),
+            (created_at or datetime.now(timezone.utc)).isoformat(),
+            (last_accessed or datetime.now(timezone.utc)).isoformat(),
             access_count,
         ),
     )
@@ -117,9 +133,12 @@ def insert_chunk(
     return chunk_id
 
 
-def get_chunk(chunk_id: str) -> Optional[sqlite3.Row]:
+def get_chunk(chunk_id: str, user_id: str) -> Optional[sqlite3.Row]:
     conn = _connect()
-    row = conn.execute("SELECT * FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM chunks WHERE id = ? AND user_id = ?",
+        (chunk_id, user_id),
+    ).fetchone()
     conn.close()
     return row
 
@@ -146,68 +165,98 @@ def get_lowest_retention_chunks(user_id: str = DEFAULT_USER_ID, limit: int = 5) 
     return rows
 
 
-def update_chunk_access(chunk_id: str, user_id: str = DEFAULT_USER_ID, source: str = "manual") -> sqlite3.Row:
+def update_chunk_access(chunk_id: str, user_id: str, source: str = "manual") -> Optional[sqlite3.Row]:
     conn = _connect()
-    now = datetime.utcnow().isoformat()
-    conn.execute(
-        "UPDATE chunks SET access_count = access_count + 1, last_accessed = ? WHERE id = ?",
-        (now, chunk_id),
+    now = datetime.now(timezone.utc).isoformat()
+    cursor = conn.execute(
+        "UPDATE chunks SET access_count = access_count + 1, last_accessed = ? WHERE id = ? AND user_id = ?",
+        (now, chunk_id, user_id),
     )
+    if cursor.rowcount == 0:
+        conn.close()
+        return None
     conn.execute(
         "INSERT INTO access_log (chunk_id, user_id, accessed_at, source) VALUES (?, ?, ?, ?)",
         (chunk_id, user_id, now, source),
     )
     conn.commit()
-    row = conn.execute("SELECT * FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM chunks WHERE id = ? AND user_id = ?",
+        (chunk_id, user_id),
+    ).fetchone()
     conn.close()
     return row
 
 
-def update_chunk_access_by(chunk_id: str, delta: int, user_id: str = DEFAULT_USER_ID, source: str = "quiz") -> sqlite3.Row:
+def update_chunk_access_by(chunk_id: str, delta: int, user_id: str, source: str = "quiz") -> Optional[sqlite3.Row]:
     """Increment access_count by an arbitrary delta (used by quiz correct answers)."""
     conn = _connect()
-    now = datetime.utcnow().isoformat()
-    conn.execute(
-        "UPDATE chunks SET access_count = access_count + ?, last_accessed = ? WHERE id = ?",
-        (delta, now, chunk_id),
+    now = datetime.now(timezone.utc).isoformat()
+    cursor = conn.execute(
+        "UPDATE chunks SET access_count = access_count + ?, last_accessed = ? WHERE id = ? AND user_id = ?",
+        (delta, now, chunk_id, user_id),
     )
+    if cursor.rowcount == 0:
+        conn.close()
+        return None
     conn.execute(
         "INSERT INTO access_log (chunk_id, user_id, accessed_at, source) VALUES (?, ?, ?, ?)",
         (chunk_id, user_id, now, source),
     )
     conn.commit()
-    row = conn.execute("SELECT * FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM chunks WHERE id = ? AND user_id = ?",
+        (chunk_id, user_id),
+    ).fetchone()
     conn.close()
     return row
 
 
 def update_chunk_category(chunk_id: str, category: str) -> None:
+    """Server-internal: called by background classifier. No user_id check by design."""
     conn = _connect()
     conn.execute("UPDATE chunks SET category = ? WHERE id = ?", (category, chunk_id))
     conn.commit()
     conn.close()
 
 
-def delete_chunk(chunk_id: str) -> None:
+def delete_chunk(chunk_id: str, user_id: str) -> bool:
+    """Delete a chunk only if it belongs to user_id. Returns True if a row was deleted."""
     conn = _connect()
-    conn.execute("DELETE FROM access_log WHERE chunk_id = ?", (chunk_id,))
-    conn.execute("DELETE FROM chunks WHERE id = ?", (chunk_id,))
+    cursor = conn.execute(
+        "DELETE FROM chunks WHERE id = ? AND user_id = ?",
+        (chunk_id, user_id),
+    )
+    deleted = cursor.rowcount > 0
+    if deleted:
+        conn.execute("DELETE FROM access_log WHERE chunk_id = ?", (chunk_id,))
     conn.commit()
     conn.close()
+    return deleted
 
 
-def update_chunk_content(chunk_id: str, content: str) -> None:
+def update_chunk_content(chunk_id: str, content: str, user_id: str) -> bool:
     conn = _connect()
-    conn.execute("UPDATE chunks SET content = ? WHERE id = ?", (content, chunk_id))
+    cursor = conn.execute(
+        "UPDATE chunks SET content = ? WHERE id = ? AND user_id = ?",
+        (content, chunk_id, user_id),
+    )
+    updated = cursor.rowcount > 0
     conn.commit()
     conn.close()
+    return updated
 
 
-def set_chunk_folder(chunk_id: str, folder: Optional[str]) -> None:
+def set_chunk_folder(chunk_id: str, folder: Optional[str], user_id: str) -> bool:
     conn = _connect()
-    conn.execute("UPDATE chunks SET folder = ? WHERE id = ?", (folder, chunk_id))
+    cursor = conn.execute(
+        "UPDATE chunks SET folder = ? WHERE id = ? AND user_id = ?",
+        (folder, chunk_id, user_id),
+    )
+    updated = cursor.rowcount > 0
     conn.commit()
     conn.close()
+    return updated
 
 
 def get_folders(user_id: str = DEFAULT_USER_ID) -> list[str]:
@@ -220,9 +269,12 @@ def get_folders(user_id: str = DEFAULT_USER_ID) -> list[str]:
     return [row["folder"] for row in rows]
 
 
-def get_chunk_full(chunk_id: str) -> Optional[sqlite3.Row]:
+def get_chunk_full(chunk_id: str, user_id: str) -> Optional[sqlite3.Row]:
     conn = _connect()
-    row = conn.execute("SELECT * FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM chunks WHERE id = ? AND user_id = ?",
+        (chunk_id, user_id),
+    ).fetchone()
     conn.close()
     return row
 
@@ -256,40 +308,56 @@ def complete_quiz_session(session_id: str, correct_count: int) -> None:
     conn = _connect()
     conn.execute(
         "UPDATE quiz_sessions SET completed_at = ?, correct_count = ? WHERE id = ?",
-        (datetime.utcnow().isoformat(), correct_count, session_id),
+        (datetime.now(timezone.utc).isoformat(), correct_count, session_id),
     )
     conn.commit()
     conn.close()
 
 
 # ---------------------------------------------------------------------------
-# Notion token helpers
+# Refresh token helpers
 # ---------------------------------------------------------------------------
 
-def store_oauth_token(user_id: str, access_token: str, workspace_id: str = "", bot_id: str = "") -> None:
+def store_refresh_token(token_hash: str, user_id: str, expires_at: datetime) -> None:
     conn = _connect()
     conn.execute(
-        """INSERT OR REPLACE INTO oauth_tokens
-           (user_id, provider, access_token, workspace_id, bot_id)
-           VALUES (?, 'notion', ?, ?, ?)""",
-        (user_id, access_token, workspace_id, bot_id),
+        """INSERT INTO refresh_tokens (token_hash, user_id, expires_at)
+           VALUES (?, ?, ?)""",
+        (token_hash, user_id, expires_at.isoformat()),
     )
     conn.commit()
     conn.close()
 
 
-def get_oauth_token(user_id: str) -> Optional[str]:
+def get_active_refresh_token(token_hash: str) -> Optional[sqlite3.Row]:
+    """Return the row only if not revoked and not expired."""
     conn = _connect()
     row = conn.execute(
-        "SELECT access_token FROM oauth_tokens WHERE user_id = ? AND provider = 'notion'",
-        (user_id,),
+        """SELECT * FROM refresh_tokens
+           WHERE token_hash = ?
+             AND revoked_at IS NULL
+             AND expires_at > ?""",
+        (token_hash, datetime.now(timezone.utc).isoformat()),
     ).fetchone()
     conn.close()
-    return row["access_token"] if row else None
+    return row
 
 
-def delete_oauth_token(user_id: str) -> None:
+def revoke_refresh_token(token_hash: str) -> None:
     conn = _connect()
-    conn.execute("DELETE FROM oauth_tokens WHERE user_id = ? AND provider = 'notion'", (user_id,))
+    conn.execute(
+        "UPDATE refresh_tokens SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL",
+        (datetime.now(timezone.utc).isoformat(), token_hash),
+    )
+    conn.commit()
+    conn.close()
+
+
+def purge_expired_refresh_tokens() -> None:
+    conn = _connect()
+    conn.execute(
+        "DELETE FROM refresh_tokens WHERE expires_at <= ?",
+        (datetime.now(timezone.utc).isoformat(),),
+    )
     conn.commit()
     conn.close()

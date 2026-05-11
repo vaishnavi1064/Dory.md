@@ -12,10 +12,7 @@ scikit-learn
 groq
 openai
 anthropic
-notion-client
-httpx
 python-multipart
 python-jose[cryptography]
-authlib
 python-dotenv
 bcrypt

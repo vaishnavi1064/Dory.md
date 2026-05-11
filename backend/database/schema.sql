@@ -6,15 +6,6 @@ CREATE TABLE IF NOT EXISTS users (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS oauth_tokens (
-    user_id TEXT PRIMARY KEY REFERENCES users(id),
-    provider TEXT NOT NULL DEFAULT 'notion',
-    access_token TEXT NOT NULL,
-    workspace_id TEXT,
-    bot_id TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS chunks (
     id TEXT PRIMARY KEY,
     user_id TEXT REFERENCES users(id),
@@ -45,6 +36,15 @@ CREATE TABLE IF NOT EXISTS quiz_sessions (
     total_count INTEGER DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    revoked_at DATETIME
+);
+
 CREATE INDEX IF NOT EXISTS idx_chunks_user ON chunks(user_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_retention ON chunks(last_accessed, access_count);
 CREATE INDEX IF NOT EXISTS idx_access_log_chunk ON access_log(chunk_id, accessed_at);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);

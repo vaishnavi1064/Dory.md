@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from core.decay_engine import calculate_retention
 from database.db import (
     create_quiz_session,
-    get_chunk,
     get_lowest_retention_chunks,
     update_chunk_access_by,
 )
@@ -172,12 +171,12 @@ def start_quiz(user_id: str = Depends(get_current_user_id)):
 @router.post("/quiz/answer", response_model=QuizAnswerResponse)
 def submit_answer(body: QuizAnswerRequest, user_id: str = Depends(get_current_user_id)):
     correct = body.selected_index == body.correct_index
+    new_r = 0.0
     if correct and not body.chunk_id.startswith("fallback-"):
-        updated = update_chunk_access_by(body.chunk_id, delta=2, source="quiz")
-        last_accessed = datetime.now(tz=timezone.utc)
-        new_r = calculate_retention(last_accessed, updated["access_count"], updated["complexity_score"])
-    else:
-        new_r = 0.0
+        updated = update_chunk_access_by(body.chunk_id, delta=2, user_id=user_id, source="quiz")
+        if updated is not None:
+            last_accessed = datetime.now(tz=timezone.utc)
+            new_r = calculate_retention(last_accessed, updated["access_count"], updated["complexity_score"])
 
     return QuizAnswerResponse(
         correct=correct,
@@ -206,11 +205,12 @@ def submit_quiz(session_id: str, body: QuizSubmitRequest, user_id: str = Depends
 
         stability_delta = 0.0
         if correct and not chunk_id.startswith("fallback-"):
-            update_chunk_access_by(chunk_id, delta=2, source="quiz")
-            stability_delta = 12.0
-            score += 1
-            current_streak += 1
-            max_streak = max(max_streak, current_streak)
+            updated = update_chunk_access_by(chunk_id, delta=2, user_id=user_id, source="quiz")
+            if updated is not None:
+                stability_delta = 12.0
+                score += 1
+                current_streak += 1
+                max_streak = max(max_streak, current_streak)
         else:
             current_streak = 0
             if not chunk_id.startswith("fallback-") and not correct:

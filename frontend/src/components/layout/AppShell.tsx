@@ -17,18 +17,17 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col bg-[var(--bg)] text-[var(--text-1)]">
       <Header hasDiscovery={discovery !== null} onDiscoveryClick={scrollToDiscovery} />
-
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto" style={{ background: '#0a0a0a' }}>
+        <main className="flex-1 min-w-0 overflow-y-auto">
           {discovery && (
-            <div ref={discoveryRef} className="px-6 pt-4">
+            <div ref={discoveryRef} className="px-4 pt-4 md:px-6">
               <DiscoveryCard discovery={discovery} onDismiss={dismiss} />
             </div>
           )}
-          <div className="px-6 py-5">
+          <div className="mx-auto w-full max-w-[1500px] px-4 py-5 md:px-6 md:py-6">
             {children}
           </div>
         </main>
