@@ -2,8 +2,9 @@
 Singleton SentenceTransformer wrapper.
 
 The model is loaded lazily (importing sentence_transformers + torch is expensive,
-so we defer it until the first ingest/search). main.py's lifespan calls warm_model()
-once at startup so the first real request is never cold; tests can skip that.
+so we defer it until the first ingest/search). The backend's lifespan calls
+warm_model() once at startup so the first real request is never cold; tests skip
+that via DORY_SKIP_WARMUP.
 """
 
 _model = None  # type: ignore[var-annotated]

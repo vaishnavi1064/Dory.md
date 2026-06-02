@@ -1,19 +1,19 @@
-"""Spaced-repetition scheduling for chunks.
+"""Spaced-repetition scheduling for chunks (FSRS-4).
 
-Wraps the `fsrs` package (the canonical Python implementation of FSRS-4) so the
-rest of the codebase doesn't import from `fsrs` directly. The scheduler decides
-when a chunk is next due for review based on the user's self-grade after each
-review.
+Wraps the `fsrs` package so the rest of the codebase doesn't import from `fsrs`
+directly. The scheduler decides when a chunk is next due for review based on the
+user's self-grade after each review.
 
 Why FSRS instead of SM-2 (Anki's classic algorithm):
 - FSRS models stability and difficulty as separable parameters, where SM-2
   conflates them into a single ease factor.
-- FSRS is fit on millions of real-world reviews, SM-2's parameters are hand-set.
+- FSRS is fit on millions of real-world reviews; SM-2's parameters are hand-set.
 - Empirically: FSRS converges on the user's desired retention rate (default 90%)
   with ~30% fewer reviews than SM-2 for the same retention target.
 
-The full algorithm and weight derivation are documented at
-https://github.com/open-spaced-repetition/fsrs4anki/wiki/The-Algorithm.
+This module is pure: `grade()` takes a mapping of the card's persisted FSRS state
+(any object supporting `row["fsrs_state"]`-style access — a dict or a sqlite3.Row)
+and returns a dict of new column values. Persisting them is the backend's job.
 """
 
 from __future__ import annotations
@@ -32,8 +32,6 @@ VALID_GRADES = {1, 2, 3, 4}
 def _card_from_row(row: Any) -> Card:
     """Reconstruct an fsrs.Card from a chunk row's FSRS columns."""
     return Card.from_dict({
-        # Card.from_dict tolerates a missing card_id; we don't use it because
-        # the chunk_id is our identifier.
         "card_id": 0,
         "state": row["fsrs_state"] if row["fsrs_state"] is not None else 1,
         "step": row["fsrs_step"] if row["fsrs_step"] is not None else 0,

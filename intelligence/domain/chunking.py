@@ -3,7 +3,7 @@ Semantic text chunker.
 
 Target: 200–400 tokens per chunk, 50-token overlap.
 Uses word count as a token approximation (word_count * 0.75 ≈ tokens).
-No external tokenizer dependency — fast enough for hackathon scale.
+No external tokenizer dependency.
 
 Strategy:
   1. Split on double-newline paragraph boundaries.

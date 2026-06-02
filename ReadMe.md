@@ -27,23 +27,27 @@ A personal knowledge system that models your memory decay using the Ebbinghaus f
 
 ```
 Dory.md/
-├── backend/                FastAPI server
-│   ├── main.py             app entry + CORS + lifespan
-│   ├── routers/            auth, chunks, search, ingest, quiz, …
+├── backend/                FastAPI server — orchestration only (routes, auth, persistence)
+│   ├── main.py             app entry + CORS + logging + lifespan + livez/readyz
+│   ├── observability.py    logging config        ratelimit.py  in-memory limiter
+│   ├── routers/            auth, chunks, search, ingest, quiz, review, …
 │   │   └── _shared.py      datetime + chunk-shape helpers
-│   ├── core/               decay_engine, chunker, complexity, embeddings
-│   ├── services/           chroma_service, llm_service, category_service
+│   ├── services/           category_service (classification orchestration)
 │   ├── database/           db.py + schema.sql (SQLite)
 │   ├── models/schemas.py   Pydantic request/response shapes
 │   ├── parsers/            file/pdf/html parsers
-│   └── tests/              17 pytest cases (auth + chunk authorization + AI gate)
+│   └── tests/              backend pytest (auth, chunk authz, FSRS loop, AI gate, P0 fixes, rate limit)
+├── intelligence/           Independent domain layer (no HTTP/DB) — see ARCHITECTURE_REFACTOR.md
+│   ├── memory/             Ebbinghaus retention + FSRS scheduler
+│   ├── embeddings/         SentenceTransformer vectorization
+│   ├── retrieval/          ChromaDB vector store
+│   ├── ranking/            hybrid composite scoring
+│   ├── llm/                provider abstraction + categorization + quiz generation
+│   ├── domain/             chunking + complexity
+│   └── tests/              pure unit tests + boundary enforcement
 ├── frontend/
-│   └── src/
-│       ├── pages/          Dashboard, Library, Search, Quiz, NoteEditor, Settings, …
-│       ├── components/     chunks, notes, quiz, layout, ui, discovery, search, upload
-│       ├── lib/            api, tokens, types, utils, useDashboardData, useDiscoveryPolling
-│       ├── contexts/       AuthContext
-│       └── styles/         theme.ts (warm-grey accent + retention color scale)
+│   └── src/                pages, components, lib, contexts, styles
+├── Dockerfile              backend container        .github/workflows/ci.yml  CI
 └── ReadMe.md
 ```
 
@@ -89,10 +93,16 @@ Then go to **Settings → Demo data → Load demo data** to seed 55 chunks acros
 
 ## Tests
 ```bash
-cd backend
-.testvenv/Scripts/python.exe -m pytest tests/ -v
-# or use the regular venv if it has pytest installed
+# From the repo root, in a venv with the test deps installed:
+pip install -r backend/requirements-test.txt
+
+# Backend suite (run from backend/ so `from main import app` resolves):
+cd backend && python -m pytest tests/ -v
+
+# Intelligence layer suite (pure logic, ~0.1s):
+cd .. && python -m pytest intelligence/tests/ -v
 ```
+CI runs both suites plus frontend `tsc` / `lint` / `build` — see `.github/workflows/ci.yml`.
 
 ## Environment variables
 

@@ -1,14 +1,19 @@
 """
-ChromaDB singleton.
+ChromaDB vector store adapter — the semantic-retrieval backbone.
 
 Collection: dory_chunks
   - Embeddings: all-MiniLM-L6-v2 (384-dim)
   - Metadata per document: user_id, chunk_id, source_file
-  - Persisted at ./data/chroma
+  - Persisted at <repo>/backend/data/chroma (kept alongside the SQLite file so a
+    single volume mount covers both stores).
+
+This module owns vector persistence only. It does not compute embeddings (that's
+intelligence.embeddings) and knows nothing about the relational DB.
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -18,15 +23,24 @@ from chromadb.config import Settings
 _client: Optional[chromadb.ClientAPI] = None
 _collection = None
 COLLECTION_NAME = "dory_chunks"
-CHROMA_PATH = Path(__file__).parent.parent / "data" / "chroma"
+
+# Default path keeps parity with the original layout (backend/data/chroma) so
+# existing local data is picked up. Override with DORY_CHROMA_PATH if desired.
+_DEFAULT_CHROMA_PATH = Path(__file__).resolve().parent.parent.parent / "backend" / "data" / "chroma"
+
+
+def _chroma_path() -> Path:
+    override = os.getenv("DORY_CHROMA_PATH")
+    return Path(override) if override else _DEFAULT_CHROMA_PATH
 
 
 def _get_client() -> chromadb.ClientAPI:
     global _client
     if _client is None:
-        CHROMA_PATH.mkdir(parents=True, exist_ok=True)
+        path = _chroma_path()
+        path.mkdir(parents=True, exist_ok=True)
         _client = chromadb.PersistentClient(
-            path=str(CHROMA_PATH),
+            path=str(path),
             settings=Settings(anonymized_telemetry=False),
         )
     return _client
@@ -46,6 +60,12 @@ def add_chunks(chunk_ids: list[str], embeddings: list[list[float]], metadatas: l
     """Store embeddings + metadata. Documents are not stored (content lives in SQLite)."""
     col = get_collection()
     col.add(ids=chunk_ids, embeddings=embeddings, metadatas=metadatas)
+
+
+def upsert_chunk(chunk_id: str, embedding: list[float], metadata: dict) -> None:
+    """Insert-or-replace a single chunk's embedding. Used after a content edit so
+    the vector stays in sync with the SQLite content (AUDIT P0-1)."""
+    get_collection().upsert(ids=[chunk_id], embeddings=[embedding], metadatas=[metadata])
 
 
 def query_similar(
