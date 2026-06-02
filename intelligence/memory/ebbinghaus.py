@@ -8,7 +8,6 @@ Formula:  R(t) = e^( -t / (S * k * BASE_HOURS) )
   k          = complexity modifier = 0.5 + 1.5 * complexity_score
                (range 0.5 – 2.0; higher k = slower decay for complex content)
   BASE_HOURS = 216 h (9 days) — characteristic half-life for a brand-new note.
-               Aligns with the intelligence branch which uses stability_S in days * 24.
 
 Typical behaviour:
   - Note accessed 3 days ago, 3 reviews  → R ≈ 0.87 (strong)
@@ -75,11 +74,18 @@ def calculate_retention_batch(
     return np.exp(-t / (S * k * _BASE_HOURS))
 
 
+# Retention status thresholds — the single source of truth shared by backend
+# responses AND the frontend (mirror these in the SPA, see UI_REVIEW D-1).
+STRONG_THRESHOLD = 0.8
+FADING_THRESHOLD = 0.5
+WEAK_THRESHOLD = 0.2
+
+
 def classify_retention(r: float) -> str:
-    if r >= 0.8:
+    if r >= STRONG_THRESHOLD:
         return "strong"
-    if r >= 0.5:
+    if r >= FADING_THRESHOLD:
         return "fading"
-    if r >= 0.2:
+    if r >= WEAK_THRESHOLD:
         return "weak"
     return "critical"

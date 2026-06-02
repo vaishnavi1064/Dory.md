@@ -12,13 +12,6 @@ Switch between providers by changing two env vars — no code changes needed:
   LLM_PROVIDER=anthropic     # Anthropic cloud API
   LLM_MODEL=claude-haiku-4-5-20251001
 
-Provider details:
-  groq      — Groq cloud API. Requires GROQ_API_KEY. OpenAI-compatible interface.
-              Recommended models: llama-3.3-70b-versatile, llama-3.1-8b-instant,
-                                  gemma2-9b-it, qwen-qwq-32b
-  ollama    — OpenAI-compatible REST at OLLAMA_BASE_URL (default: http://localhost:11434/v1).
-  anthropic — Anthropic Messages API. Requires ANTHROPIC_API_KEY.
-
 All callers use a single method:  llm.complete(prompt, system="")
 """
 
@@ -104,7 +97,7 @@ class LLMService:
             return fallback or {}
 
 
-# Module-level singleton — imported by category_service and quiz router
+# Module-level singleton — imported by categorization + quiz generation.
 _service: LLMService | None = None
 
 
