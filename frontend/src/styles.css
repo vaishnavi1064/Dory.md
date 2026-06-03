@@ -3,33 +3,68 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f6f3ed;
-  --bg-soft: #eee7da;
-  --surface: #fffdf8;
-  --surface-2: #f8f3ea;
-  --surface-3: #ebe1d2;
-  --border: #dfd5c6;
-  --border-strong: #cbbba7;
-  --text-1: #1f211d;
-  --text-2: #5f615a;
-  --text-3: #888276;
-  --text-4: #aaa193;
-  /* Warm-grey accent (Notion-style) — replaces the previous teal so the UI reads as neutral. */
-  --accent: #4a4945;
-  --accent-hover: #2f2e2b;
-  --accent-soft: #ece8df;
-  --accent-border: #c8c2b3;
-  --warn: #c97917;
-  --danger: #c94433;
-  --good: #3a8d54;
-  --info: #466fb0;
-  --violet: #6d5bd0;
-  --shadow: 0 18px 50px rgba(66, 50, 24, 0.12);
+  /* Radius scale base — the only radius source of truth. */
+  --radius: 0.5rem;
+
+  /* ── Superhuman semantic tokens (oklch channels). These are consumed by the
+        Tailwind @theme-style color registrations in tailwind.config.js, which
+        wrap them as `oklch(var(--token) / <alpha-value>)` so utilities like
+        bg-background, text-foreground, bg-lavender/30 all work in v3. ── */
+  --background: 1 0 0;
+  --foreground: 0.22 0.01 60;
+  --primary: 0.20 0.06 280;
+  --primary-foreground: 0.97 0.005 280;
+  --secondary: 0.93 0.015 75;
+  --secondary-foreground: 0.22 0.01 60;
+  --muted: 0.955 0.008 75;
+  --muted-foreground: 0.50 0.01 60;
+  --accent-foreground: 0.22 0.01 60;
+  --destructive: 0.577 0.245 27;
+  --destructive-foreground: 0.97 0.005 280;
+  --input: 0.89 0.012 70;
+  --ring: 0.82 0.10 290;
+
+  /* Special tokens */
+  --cream: 0.93 0.015 75;
+  --lavender: 0.82 0.10 290;
+  --hero: 0.15 0.04 280;
+
+  /* ── Legacy application variables, kept as full colors and retuned to the
+        Superhuman palette. The existing component vocabulary references these
+        directly (var(--surface), var(--text-1), …), so retuning here reskins
+        the whole app without touching hundreds of call sites. ── */
+  --bg: oklch(1 0 0);
+  --bg-soft: oklch(0.97 0.01 75);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.975 0.008 75);
+  --surface-3: oklch(0.93 0.015 75);
+  --border: oklch(0.89 0.012 70);
+  --border-strong: oklch(0.83 0.015 70);
+  --text-1: oklch(0.22 0.01 60);
+  --text-2: oklch(0.40 0.012 60);
+  --text-3: oklch(0.50 0.01 60);
+  --text-4: oklch(0.62 0.012 65);
+  /* Primary action color — deep indigo near-black, matches --primary. */
+  --accent: oklch(0.20 0.06 280);
+  --accent-hover: oklch(0.27 0.07 282);
+  /* Lavender wash + lavender line for soft accent surfaces. */
+  --accent-soft: oklch(0.95 0.03 290);
+  --accent-border: oklch(0.82 0.10 290);
+  --warn: oklch(0.70 0.15 70);
+  --danger: oklch(0.577 0.245 27);
+  --good: oklch(0.60 0.13 150);
+  --info: oklch(0.55 0.12 260);
+  --violet: oklch(0.58 0.18 290);
+  --shadow: 0 18px 50px oklch(0.20 0.06 280 / 0.10);
 }
 
 @layer base {
   *, *::before, *::after {
     box-sizing: border-box;
+  }
+
+  * {
+    border-color: var(--border);
   }
 
   html {
@@ -40,12 +75,12 @@
   body {
     min-height: 100vh;
     margin: 0;
-    background:
-      linear-gradient(180deg, rgba(255, 253, 248, 0.72), rgba(246, 243, 237, 0.92)),
-      var(--bg);
+    background: var(--bg);
     color: var(--text-1);
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 460;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
@@ -62,7 +97,7 @@
   }
 
   ::selection {
-    background: rgba(74, 73, 69, 0.22);
+    background: oklch(var(--lavender) / 0.28);
   }
 
   ::-webkit-scrollbar {
@@ -75,12 +110,12 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #cfc3b3;
+    background: var(--border-strong);
     border-radius: 999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #b9aa97;
+    background: oklch(var(--lavender) / 0.6);
   }
 }
 
@@ -93,7 +128,16 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+    box-shadow: 0 1px 0 oklch(1 0 0 / 0.75);
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .app-card:hover,
+  .gcard:hover,
+  .glass-card:hover,
+  .corp-card:hover {
+    border-color: oklch(var(--lavender) / 0.3);
+    box-shadow: 0 10px 30px oklch(var(--lavender) / 0.08);
   }
 
   .app-card-muted,
@@ -104,7 +148,7 @@
   }
 
   .app-panel {
-    background: rgba(255, 253, 248, 0.78);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
   }
@@ -119,10 +163,10 @@
   .app-label,
   .corp-section-label,
   .label {
-    color: var(--text-3);
+    color: oklch(var(--lavender) / 0.95);
     font-size: 0.72rem;
     font-weight: 700;
-    letter-spacing: 0;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
   }
 
@@ -142,19 +186,20 @@
     gap: 0.45rem;
     min-height: 2.25rem;
     padding: 0.55rem 0.85rem;
-    border: 1px solid rgba(9, 88, 81, 0.18);
+    border: 1px solid oklch(var(--primary) / 0.2);
     border-radius: 8px;
     background: var(--accent);
     color: white;
     font-size: 0.84rem;
     font-weight: 700;
     line-height: 1;
-    transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+    transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
   }
 
   .btn-primary:hover,
   .corp-btn-primary:hover {
     background: var(--accent-hover);
+    box-shadow: 0 6px 18px oklch(var(--lavender) / 0.18);
   }
 
   .btn-primary:active,
@@ -190,7 +235,7 @@
   .corp-btn-secondary:hover,
   .btn:hover {
     background: var(--surface-2);
-    border-color: var(--border-strong);
+    border-color: var(--accent-border);
     color: var(--text-1);
   }
 
@@ -213,8 +258,8 @@
 
   .btn-ghost:hover,
   .corp-btn-ghost:hover {
-    background: rgba(31, 33, 29, 0.05);
-    border-color: rgba(31, 33, 29, 0.08);
+    background: oklch(var(--foreground) / 0.05);
+    border-color: oklch(var(--foreground) / 0.08);
     color: var(--text-1);
   }
 
@@ -244,7 +289,7 @@
   .input-field:focus,
   .input:focus {
     border-color: var(--accent-border);
-    box-shadow: 0 0 0 3px rgba(74, 73, 69, 0.12);
+    box-shadow: 0 0 0 3px oklch(var(--ring) / 0.3);
   }
 
   .tag,
@@ -277,13 +322,13 @@
   }
 
   .nav-item:hover {
-    background: rgba(74, 73, 69, 0.08);
+    background: oklch(var(--lavender) / 0.1);
     color: var(--text-1);
   }
 
   .nav-item-active {
     background: var(--accent-soft);
-    color: #2f2e2b;
+    color: var(--accent);
     border: 1px solid var(--accent-border);
   }
 
@@ -292,7 +337,7 @@
     height: 0.5rem;
     overflow: hidden;
     border-radius: 999px;
-    background: #e4d9c8;
+    background: var(--surface-3);
   }
 
   .retention-bar-fill {
@@ -302,22 +347,22 @@
   }
 
   .badge-strong {
-    color: #246c3d;
-    background: rgba(58, 141, 84, 0.12);
-    border: 1px solid rgba(58, 141, 84, 0.22);
+    color: var(--good);
+    background: oklch(var(--good) / 0.12);
+    border: 1px solid oklch(var(--good) / 0.22);
   }
 
   .badge-fading {
-    color: #9a5c08;
-    background: rgba(201, 121, 23, 0.13);
-    border: 1px solid rgba(201, 121, 23, 0.25);
+    color: var(--warn);
+    background: oklch(var(--warn) / 0.13);
+    border: 1px solid oklch(var(--warn) / 0.25);
   }
 
   .badge-weak,
   .badge-critical {
-    color: #a5372a;
-    background: rgba(201, 68, 51, 0.12);
-    border: 1px solid rgba(201, 68, 51, 0.24);
+    color: var(--danger);
+    background: oklch(var(--destructive) / 0.12);
+    border: 1px solid oklch(var(--destructive) / 0.24);
   }
 
   .tile {
@@ -339,17 +384,10 @@
 .line-clamp-2 { -webkit-line-clamp: 2; }
 .line-clamp-3 { -webkit-line-clamp: 3; }
 
-.tracking-tight,
-.tracking-wide,
-.tracking-wider,
-.tracking-widest {
-  letter-spacing: 0 !important;
-}
-
 mark {
   border-radius: 3px;
-  background: rgba(74, 73, 69, 0.16);
-  color: #2f2e2b;
+  background: oklch(var(--lavender) / 0.22);
+  color: var(--text-1);
   padding: 0 0.15rem;
 }
 
@@ -394,7 +432,6 @@ mark {
   animation: spin 800ms linear infinite;
 }
 
-.animate-float,
 .animate-spin-slow,
 .animate-pulse-ring {
   animation: none;
@@ -405,6 +442,8 @@ mark {
   font-size: 1.8rem;
   font-weight: 800;
   margin: 1.2rem 0 0.65rem;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
 }
 
 .md-preview h2 {
@@ -412,6 +451,8 @@ mark {
   font-size: 1.25rem;
   font-weight: 800;
   margin: 1rem 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
 }
 
 .md-preview h3 {
@@ -434,8 +475,8 @@ mark {
 
 .md-preview code {
   border-radius: 4px;
-  background: rgba(31, 33, 29, 0.07);
-  color: #2f2e2b;
+  background: oklch(var(--foreground) / 0.06);
+  color: var(--text-1);
   padding: 0.08rem 0.28rem;
   font-size: 0.88em;
 }
@@ -444,8 +485,8 @@ mark {
   overflow-x: auto;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: #201f1b;
-  color: #f6f3ed;
+  background: oklch(var(--hero));
+  color: oklch(var(--background));
   padding: 1rem;
 }
 
@@ -453,7 +494,7 @@ mark {
   margin: 1rem 0;
   padding: 0.55rem 0.85rem;
   border-left: 3px solid var(--warn);
-  background: rgba(201, 121, 23, 0.08);
+  background: oklch(var(--warn) / 0.1);
   color: var(--text-2);
 }
 
@@ -513,7 +554,7 @@ input[type="range"] {
 input[type="range"]::-webkit-slider-runnable-track {
   height: 0.45rem;
   border-radius: 999px;
-  background: #d9ccba;
+  background: var(--surface-3);
 }
 
 input[type="range"]::-webkit-slider-thumb {
@@ -525,4 +566,32 @@ input[type="range"]::-webkit-slider-thumb {
   border: 2px solid var(--surface);
   background: var(--accent);
   box-shadow: 0 0 0 1px var(--accent-border);
+}
+
+@layer utilities {
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  /* Soft lavender + pink radial blobs for hero / empty-state backdrops. */
+  .mesh-bg {
+    background-color: oklch(var(--background));
+    background-image:
+      radial-gradient(at 18% 22%, oklch(var(--lavender) / 0.12) 0px, transparent 50%),
+      radial-gradient(at 82% 14%, oklch(0.85 0.09 350 / 0.1) 0px, transparent 50%),
+      radial-gradient(at 72% 82%, oklch(var(--lavender) / 0.08) 0px, transparent 55%),
+      radial-gradient(at 28% 86%, oklch(0.85 0.09 350 / 0.06) 0px, transparent 50%);
+  }
+
+  /* Subtle dotted texture; set a text color on the element to tint the dots. */
+  .dot-overlay {
+    background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
+    background-size: 24px 24px;
+    opacity: 0.03;
+  }
 }
