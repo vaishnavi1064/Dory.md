@@ -28,6 +28,10 @@ build/
 venv/
 env/
 chroma_db/
+.pytest_cache/
+
+# Logs
+*.log
 
 # Environment
 .env
