@@ -212,6 +212,40 @@
     opacity: 0.45;
   }
 
+  /* Destructive solid button — mirrors .btn-primary but on the --danger token.
+     Hover darkens via brightness (no new color literal) + a destructive-tinted shadow. */
+  .btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 2.25rem;
+    padding: 0.55rem 0.85rem;
+    border: 1px solid oklch(var(--destructive) / 0.25);
+    border-radius: 8px;
+    background: var(--danger);
+    color: white;
+    font-size: 0.84rem;
+    font-weight: 700;
+    line-height: 1;
+    transition: filter 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .btn-danger:hover {
+    filter: brightness(0.94);
+    box-shadow: 0 6px 18px oklch(var(--destructive) / 0.22);
+  }
+
+  .btn-danger:active {
+    transform: translateY(1px);
+  }
+
+  .btn-danger:disabled {
+    opacity: 0.45;
+    filter: none;
+    box-shadow: none;
+  }
+
   .btn-secondary,
   .corp-btn-secondary,
   .btn {
@@ -566,6 +600,76 @@ input[type="range"]::-webkit-slider-thumb {
   border: 2px solid var(--surface);
   background: var(--accent);
   box-shadow: 0 0 0 1px var(--accent-border);
+}
+
+/* ── Custom timer: hide number spinners, phase/celebration motion, confetti ── */
+
+input[type='number'].timer-number-input::-webkit-inner-spin-button,
+input[type='number'].timer-number-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'].timer-number-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Inter-phase flash (Focus → Break) — uses the theme accent. */
+@keyframes timerPhaseFlash {
+  0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 0%, transparent); }
+  35%  { box-shadow: 0 0 0 12px color-mix(in oklab, var(--accent) 25%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 0%, transparent); }
+}
+
+/* Session-complete ring pulse — expands to 1.03 with a --good glow flash. */
+@keyframes timerCompletePulse {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0 color-mix(in oklab, var(--good) 0%, transparent); }
+  50%  { transform: scale(1.03); box-shadow: 0 0 0 16px color-mix(in oklab, var(--good) 22%, transparent); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 color-mix(in oklab, var(--good) 0%, transparent); }
+}
+
+/* Session-complete settle bounce on the circle. */
+@keyframes timerSettleBounce {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(0.96); }
+  60%  { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+@keyframes confettiFly {
+  0%   { transform: translate(0px, 0px) rotate(0deg); opacity: 1; }
+  35%  { transform: translate(calc(var(--cx) * 0.55), var(--peak)) rotate(calc(var(--rot) * 0.5)); opacity: 1; }
+  100% { transform: translate(var(--cx), var(--fall)) rotate(var(--rot)); opacity: 0; }
+}
+
+.timer-phase-flash { border-radius: 9999px; animation: timerPhaseFlash 600ms ease-out; }
+.timer-complete-pulse { border-radius: 9999px; animation: timerCompletePulse 600ms ease-out; }
+.timer-settle-bounce { animation: timerSettleBounce 400ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+.confetti-particle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: confettiFly 1500ms ease-out forwards;
+}
+
+.confetti-c1 { background: var(--accent); }
+.confetti-c2 { background: var(--good); }
+.confetti-c3 { background: var(--warn); }
+
+/* Accessibility: never run the motion-heavy timer effects when the OS asks for
+   reduced motion, regardless of the in-app celebrate toggle. */
+@media (prefers-reduced-motion: reduce) {
+  .timer-phase-flash,
+  .timer-complete-pulse,
+  .timer-settle-bounce,
+  .confetti-particle {
+    animation: none !important;
+  }
 }
 
 @layer utilities {

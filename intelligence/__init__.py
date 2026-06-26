@@ -10,7 +10,7 @@ Subpackages:
   memory      Ebbinghaus retention math + FSRS spaced-repetition scheduling.
   embeddings  SentenceTransformer vectorization (lazy, singleton).
   retrieval   Vector store (ChromaDB) adapter for semantic retrieval.
-  ranking     Hybrid composite scoring + derived memory metrics.
+  ranking     Composite ranking (weighted blend of similarity, decay urgency, recency) + derived memory metrics.
   llm         Provider abstraction + categorization + quiz generation.
   domain      Chunking + complexity scoring of raw knowledge.
 

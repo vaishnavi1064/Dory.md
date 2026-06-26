@@ -44,7 +44,7 @@ Search is dense semantic retrieval with a composite re-rank. `intelligence/embed
 
 ### The quiz pipeline
 
-`backend/routers/quiz.py` pulls your lowest-retention chunks (`get_lowest_retention_chunks`) and asks `intelligence/llm/quiz_generation.py` to turn each into a multiple-choice question via Groq (`intelligence/llm/provider.py`). Answers are scored server-side from a session-held answer key, so the client cannot self-grade. If no LLM key is configured, the pipeline falls back to a hardcoded question bank and the feature still works.
+`backend/routers/quiz.py` pulls a candidate pool of stale chunks (`get_stale_chunk_candidates`), re-ranks them by true Ebbinghaus retention to pick your lowest-retention chunks, and asks `intelligence/llm/quiz_generation.py` to turn each into a multiple-choice question via Groq (`intelligence/llm/provider.py`). Answers are scored server-side from a session-held answer key, so the client cannot self-grade. If no LLM key is configured, the pipeline falls back to a hardcoded question bank and the feature still works.
 
 ## Tech stack
 
@@ -129,6 +129,11 @@ VITE_USE_MOCKS=false                  # true renders bundled mock JSON instead o
 VITE_DISCOVERY_POLL_MS=30000          # dashboard discovery poll interval (ms)
 ```
 
+> TODO (custom timer sound): the Focus timer's "Custom" tab plays a synthesized
+> Web Audio chime when a phase ends. To use a real sound instead, drop an MP3 at
+> `frontend/public/sounds/timer-end.mp3` — it's picked up automatically at
+> runtime with no code changes.
+
 ### Tests
 
 ```bash
@@ -211,6 +216,31 @@ On the engineering side, retrieval uses `all-MiniLM-L6-v2`, a compact sentence-t
 
 Thanks to our UWB Hacks judges — Advitya Gemawat, Ashwin Sekhari, and Deepali Bharmal — for their time and feedback.
 
+## Privacy
+
+Dory.md sends note content to a third-party LLM for two features: category
+classification and quiz generation. By default this is [Groq](https://groq.com),
+whose API processes the text you ingest. See [Groq's privacy policy](https://groq.com/privacy)
+for how they handle data.
+
+If you would rather keep everything local, set `LLM_PROVIDER=ollama` (with a local
+[Ollama](https://ollama.com) server) — note content then never leaves your machine.
+Embeddings and semantic search are always computed locally regardless of provider.
+
+You own your data. The API exposes `GET /api/account/export` to download everything
+we store about you as JSON, and `DELETE /api/account` to permanently erase your
+account and all associated data (a hard delete — no soft-delete, no grace period).
+
+### Limits
+
+File upload caps (`POST /api/ingest`), enforced server-side:
+
+- **Max files per upload:** 20
+- **Max size per file:** 10 MB
+- **Max total size per upload:** 20 MB
+
+Exceeding any limit returns HTTP 400 with a descriptive error message.
+
 ## License
 
-MIT. <!-- TODO: no LICENSE file exists in the repo yet — add an MIT LICENSE file at the root to make this official. -->
+MIT — see [LICENSE](./LICENSE). Copyright (c) 2026 Vaishnavi Chaughule.

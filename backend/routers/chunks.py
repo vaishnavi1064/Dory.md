@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 
 import logging
 
@@ -110,28 +111,55 @@ def update_chunk(chunk_id: str, body: UpdateChunkRequest, user_id: str = Depends
 
 @router.delete("/chunks/{chunk_id}")
 def delete_chunk_route(chunk_id: str, user_id: str = Depends(get_current_user_id)):
-    """Delete a single chunk."""
+    """Delete a single chunk from BOTH SQLite and the vector store. If the vector
+    store delete fails after the SQLite row is gone, surface it as a 500 instead of
+    silently leaving a stale embedding behind."""
     if not delete_chunk(chunk_id, user_id):
         raise HTTPException(status_code=404, detail="Chunk not found")
     try:
         chroma_delete(chunk_id, user_id)
     except Exception:
-        pass
+        logger.critical(
+            "Partial delete: SQLite row %s removed but vector store delete failed",
+            chunk_id, exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Partial delete; please contact support.")
     return {"deleted": chunk_id}
 
 
 @router.post("/chunks/bulk-delete")
 def bulk_delete_chunks(body: BulkDeleteRequest, user_id: str = Depends(get_current_user_id)):
-    """Delete multiple chunks by ID. Only chunks owned by user_id are deleted."""
-    deleted = 0
+    """Delete multiple chunks by ID (only those owned by user_id). On success returns
+    {"deleted": <count>}. If any vector store delete fails after its SQLite row was
+    removed, returns 500 with a structured body listing what succeeded and what failed."""
+    deleted: list[str] = []
+    failed: list[dict] = []
     for cid in body.chunk_ids:
-        if delete_chunk(cid, user_id):
-            deleted += 1
-            try:
-                chroma_delete(cid, user_id)
-            except Exception:
-                pass
-    return {"deleted": deleted}
+        if not delete_chunk(cid, user_id):
+            continue  # not found / not owned — silently skip (matches single-delete authz)
+        try:
+            chroma_delete(cid, user_id)
+            deleted.append(cid)
+        except Exception as exc:
+            logger.critical(
+                "Partial bulk delete: SQLite row %s removed but vector store delete failed",
+                cid, exc_info=True,
+            )
+            failed.append({"chunk_id": cid, "reason": str(exc) or "vector store delete failed"})
+
+    if failed:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "deleted": deleted,
+                "failed": failed,
+                "message": (
+                    f"{len(deleted)} chunk(s) deleted; {len(failed)} could not be removed "
+                    "from the vector store. Please contact support."
+                ),
+            },
+        )
+    return {"deleted": len(deleted)}
 
 
 @router.patch("/chunks/{chunk_id}/folder")

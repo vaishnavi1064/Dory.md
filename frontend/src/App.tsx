@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/AppShell';
@@ -8,11 +9,15 @@ import { ReviewPage } from '@/pages/ReviewPage';
 import { LibraryPage } from '@/pages/LibraryPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { CalendarPage } from '@/pages/CalendarPage';
+import { MeetingsPage } from '@/pages/MeetingsPage';
 import { NoteEditorPage } from '@/pages/NoteEditorPage';
 import { PomodoroPage } from '@/pages/PomodoroPage';
+import { MoodDashboard } from '@/pages/MoodDashboard';
 import { LoginPage } from '@/pages/LoginPage';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { startWellnessScheduler, stopWellnessScheduler } from '@/lib/wellness';
+import { startMeetingScheduler, stopMeetingScheduler } from '@/lib/meetingScheduler';
 
 const pageVariants = {
   initial: { opacity: 0, y: 8 },
@@ -26,6 +31,30 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function WellnessScheduler() {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    startWellnessScheduler();
+    return () => stopWellnessScheduler();
+  }, [user]);
+
+  return null;
+}
+
+function MeetingScheduler() {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    startMeetingScheduler();
+    return () => stopMeetingScheduler();
+  }, [user]);
+
+  return null;
+}
+
 function AnimatedRoutes() {
   const location = useLocation();
 
@@ -36,6 +65,8 @@ function AnimatedRoutes() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/*" element={
             <ProtectedRoute>
+              <WellnessScheduler />
+              <MeetingScheduler />
               <AppShell>
                 <ErrorBoundary>
                   <Routes>
@@ -45,8 +76,10 @@ function AnimatedRoutes() {
                     <Route path="/review"   element={<ReviewPage />} />
                     <Route path="/library"  element={<LibraryPage />} />
                     <Route path="/calendar" element={<CalendarPage />} />
+                    <Route path="/meetings" element={<MeetingsPage />} />
                     <Route path="/notes"    element={<NoteEditorPage />} />
                     <Route path="/pomodoro" element={<PomodoroPage />} />
+                    <Route path="/mood" element={<MoodDashboard />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="*" element={
                       <div className="app-card p-10 text-center">

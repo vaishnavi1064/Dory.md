@@ -10,6 +10,8 @@ import {
   moveChunkToFolder, aiSummarize, aiExpand, aiOptimize,
   ingestText,
 } from '@/lib/api';
+import { MoodPrompt } from '@/components/mood/MoodPrompt';
+import { tryShowMoodPrompt } from '@/lib/mood';
 import { retentionToColor, retentionToLabel, categoryColors } from '@/styles/theme';
 import type { Category } from '@/lib/types';
 
@@ -115,6 +117,7 @@ export function NoteDetailPanel({ chunk, folders = [], onDelete, onContentUpdate
   const [expanded, setExpanded] = useState('');
   const [optimized, setOptimized] = useState('');
   const [savedOptimized, setSavedOptimized] = useState(false);
+  const [moodChunkId, setMoodChunkId] = useState<string | null>(null);
 
   useEffect(() => {
     setLoadingDetail(true);
@@ -249,8 +252,9 @@ export function NoteDetailPanel({ chunk, folders = [], onDelete, onContentUpdate
   }
 
   async function saveOptimized() {
-    await ingestText(optimized, 'note', `optimized_${baseName(chunk.source_file)}`);
+    const res = await ingestText(optimized, 'note', `optimized_${baseName(chunk.source_file)}`);
     setSavedOptimized(true);
+    if (tryShowMoodPrompt()) setMoodChunkId(res.chunk_id);
   }
 
   return (
@@ -402,6 +406,13 @@ export function NoteDetailPanel({ chunk, folders = [], onDelete, onContentUpdate
                   </button>
                 </div>
                 <pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-[var(--text-2)]">{optimized}</pre>
+                {moodChunkId && (
+                  <MoodPrompt
+                    chunkId={moodChunkId}
+                    eventType="create"
+                    onComplete={() => setMoodChunkId(null)}
+                  />
+                )}
               </div>
             )}
 

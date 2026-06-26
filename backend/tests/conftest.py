@@ -22,6 +22,9 @@ _BOOTSTRAP_DB.close()
 os.environ["DORY_DB_PATH"] = _BOOTSTRAP_DB.name
 os.environ["DORY_ENV"] = "dev"
 os.environ["DORY_SKIP_WARMUP"] = "1"
+# No JWT fallback exists anymore (DORY_JWT_SECRET is required in every env), so the
+# test suite must provide one before `main` is imported.
+os.environ["DORY_JWT_SECRET"] = "test-only-secret-not-for-production"
 
 from fastapi.testclient import TestClient  # noqa: E402
 

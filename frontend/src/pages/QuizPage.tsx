@@ -133,7 +133,7 @@ export function QuizPage() {
                 return (
                   <div key={`${item.date}-${index}`} className="flex items-center justify-between rounded-lg bg-[var(--surface-2)] px-3 py-2 text-sm">
                     <span className="inline-flex items-center gap-2 text-[var(--text-2)]"><CalendarClock size={14} /> {item.date}</span>
-                    <span className="font-bold" style={{ color: score >= 70 ? 'var(--good)' : score >= 45 ? 'var(--warn)' : 'var(--danger)' }}>{item.score}/{item.total}</span>
+                    <span className={`font-bold ${score >= 70 ? 'text-[var(--good)]' : score >= 45 ? 'text-[var(--warn)]' : 'text-[var(--danger)]'}`}>{item.score}/{item.total}</span>
                   </div>
                 );
               })}

@@ -231,3 +231,72 @@ class TextIngestResponse(BaseModel):
     stability_S: float
     complexity_k: float
     message: str
+
+
+# ── Mood tagging (Phase 1) ───────────────────────────────────────────────────
+
+class MoodLogRequest(BaseModel):
+    chunk_id: Optional[str] = None
+    mood: str
+    event_type: str
+
+
+class MoodLogResponse(BaseModel):
+    id: int
+
+
+class MoodHistoryEntry(BaseModel):
+    id: int
+    chunk_id: Optional[str] = None
+    mood: str
+    event_type: str
+    logged_at: str
+
+
+class MoodHistoryResponse(BaseModel):
+    entries: list[MoodHistoryEntry]
+
+
+class MoodStatsResponse(BaseModel):
+    total_logs: int
+    mood_counts: dict[str, int]
+    event_counts: dict[str, int]
+    mood_by_event: dict[str, dict[str, int]]
+    mood_over_time: list[dict]
+    insights: list[str]
+
+
+# ── Meetings ─────────────────────────────────────────────────────────────────
+
+class MeetingOut(BaseModel):
+    id: str
+    title: str
+    starts_at: str
+    duration_minutes: int
+    link: Optional[str] = None
+    notes: Optional[str] = None
+    location: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class MeetingListResponse(BaseModel):
+    meetings: list[MeetingOut]
+
+
+class CreateMeetingRequest(BaseModel):
+    title: str = ""
+    starts_at: str
+    duration_minutes: int = 30
+    link: Optional[str] = None
+    notes: Optional[str] = None
+    location: Optional[str] = None
+
+
+class UpdateMeetingRequest(BaseModel):
+    title: Optional[str] = None
+    starts_at: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    link: Optional[str] = None
+    notes: Optional[str] = None
+    location: Optional[str] = None

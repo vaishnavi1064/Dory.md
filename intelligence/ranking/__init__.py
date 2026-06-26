@@ -1,4 +1,4 @@
-"""Hybrid ranking and derived memory metrics."""
+"""Composite ranking (weighted blend of similarity, decay urgency, recency) and derived memory metrics."""
 
 from intelligence.ranking.scoring import (
     composite_score,

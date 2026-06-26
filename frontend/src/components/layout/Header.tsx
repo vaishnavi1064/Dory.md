@@ -1,7 +1,13 @@
-import { Brain, Bell, Plus, Upload, X, Menu, Settings } from 'lucide-react';
+import { Brain, Bell, Plus, Upload, X, Menu, Settings, Heart } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ingestText } from '@/lib/api';
+import { MoodPrompt } from '@/components/mood/MoodPrompt';
+import {
+  isMoodAskEnabled,
+  MOOD_CHANGED_EVENT,
+  tryShowMoodPrompt,
+} from '@/lib/mood';
 import { UploadModal } from '@/components/upload/UploadModal';
 import { navGroups } from './navConfig';
 
@@ -27,6 +33,9 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
   const [ingestContent, setIngestContent] = useState('');
   const [ingesting, setIngesting] = useState(false);
   const [ingestSuccess, setIngestSuccess] = useState(false);
+  const [moodChunkId, setMoodChunkId] = useState<string | null>(null);
+  const [manualMoodOpen, setManualMoodOpen] = useState(false);
+  const [askMoodEnabled, setAskMoodEnabled] = useState(isMoodAskEnabled);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
   const meta = pageMeta[location.pathname] ?? pageMeta['/'];
@@ -34,20 +43,36 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
   // Close the mobile nav whenever the route changes.
   useEffect(() => { setMobileNavOpen(false); }, [location.pathname]);
 
+  useEffect(() => {
+    const sync = () => setAskMoodEnabled(isMoodAskEnabled());
+    window.addEventListener(MOOD_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(MOOD_CHANGED_EVENT, sync);
+  }, []);
+
   async function handleIngest() {
     if (!ingestContent.trim()) return;
     setIngesting(true);
     try {
-      await ingestText(ingestContent.trim());
+      const res = await ingestText(ingestContent.trim());
       setIngestSuccess(true);
       setIngestContent('');
-      window.setTimeout(() => {
-        setIngestSuccess(false);
-        setShowIngest(false);
-      }, 1100);
+      if (tryShowMoodPrompt()) {
+        setMoodChunkId(res.chunk_id);
+      } else {
+        window.setTimeout(() => {
+          setIngestSuccess(false);
+          setShowIngest(false);
+        }, 1100);
+      }
     } finally {
       setIngesting(false);
     }
+  }
+
+  function closeIngestModal() {
+    setShowIngest(false);
+    setIngestSuccess(false);
+    setMoodChunkId(null);
   }
 
   return (
@@ -84,6 +109,17 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
             <Plus size={15} />
             <span>Add memory</span>
           </button>
+          {askMoodEnabled && (
+            <button
+              type="button"
+              onClick={() => setManualMoodOpen(true)}
+              className="btn-ghost h-9 w-9 p-0"
+              title="Log how you're feeling"
+              aria-label="Log mood"
+            >
+              <Heart size={20} />
+            </button>
+          )}
           <button
             type="button"
             onClick={onDiscoveryClick}
@@ -164,7 +200,7 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
                 <h3 className="text-base font-bold text-[var(--text-1)]">Add a memory</h3>
                 <p className="text-sm text-[var(--text-3)]">Paste a fragment, idea, or note. Dory will chunk and track it.</p>
               </div>
-              <button type="button" onClick={() => setShowIngest(false)} className="btn-ghost h-8 w-8 p-0" title="Close">
+              <button type="button" onClick={closeIngestModal} className="btn-ghost h-8 w-8 p-0" title="Close">
                 <X size={16} />
               </button>
             </div>
@@ -181,7 +217,7 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
                 Upload a file instead
               </button>
               <div className="flex justify-end gap-2">
-                <button type="button" className="btn-secondary" onClick={() => setShowIngest(false)}>
+                <button type="button" className="btn-secondary" onClick={closeIngestModal}>
                   Cancel
                 </button>
                 <button type="button" className="btn-primary" onClick={handleIngest} disabled={ingesting || !ingestContent.trim()}>
@@ -189,11 +225,34 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
                 </button>
               </div>
             </div>
+            {moodChunkId && (
+              <MoodPrompt
+                chunkId={moodChunkId}
+                eventType="create"
+                onComplete={closeIngestModal}
+              />
+            )}
           </div>
         </div>
       )}
 
       {showUpload && <UploadModal onClose={() => setShowUpload(false)} />}
+
+      {manualMoodOpen && askMoodEnabled && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/35 p-4 pt-20"
+          onClick={(e) => { if (e.target === e.currentTarget) setManualMoodOpen(false); }}
+        >
+          <div className="app-card w-full max-w-lg p-4 shadow-[var(--shadow)]">
+            <MoodPrompt
+              chunkId={null}
+              eventType="create"
+              markAskedOnPick
+              onComplete={() => setManualMoodOpen(false)}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }

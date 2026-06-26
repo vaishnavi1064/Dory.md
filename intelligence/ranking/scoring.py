@@ -1,5 +1,6 @@
 """
-Hybrid ranking + derived memory metrics.
+Composite ranking (weighted blend of similarity, decay urgency, recency)
++ derived memory metrics.
 
 Pure numeric helpers shared by search ranking and the chunk wire-shape. No I/O.
 

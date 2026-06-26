@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, CheckCircle2, Sparkles, X } from 'lucide-react';
 import { getReviewQueue, gradeChunk } from '@/lib/api';
+import { MoodPrompt } from '@/components/mood/MoodPrompt';
+import { tryShowMoodPrompt } from '@/lib/mood';
 import type { Grade, ReviewCard } from '@/lib/types';
 
 const GRADES: { value: Grade; label: string; shortcut: string; color: string; description: string }[] = [
@@ -48,6 +50,7 @@ export function ReviewPage() {
   const [totalDue, setTotalDue] = useState(0);
   const [direction, setDirection] = useState<1 | -1>(1); // for slide animation
   const [lastFeedback, setLastFeedback] = useState<{ grade: Grade; nextDue: string } | null>(null);
+  const [moodChunkId, setMoodChunkId] = useState<string | null>(null);
 
   // Load queue once on mount.
   useEffect(() => {
@@ -83,6 +86,7 @@ export function ReviewPage() {
         easy:  s.easy  + (grade === 4 ? 1 : 0),
       }));
       setLastFeedback({ grade, nextDue: result.next_due });
+      if (tryShowMoodPrompt()) setMoodChunkId(current.chunk_id);
       setDirection(1);
       setPosition(p => p + 1);
     } catch (e) {
@@ -315,6 +319,14 @@ export function ReviewPage() {
       <p className="mt-4 hidden sm:block text-center text-[10px] text-[var(--text-4)]">
         Press <kbd className="rounded bg-[var(--surface-2)] px-1 font-mono">1</kbd>–<kbd className="rounded bg-[var(--surface-2)] px-1 font-mono">4</kbd> to grade, <kbd className="rounded bg-[var(--surface-2)] px-1 font-mono">Esc</kbd> to exit
       </p>
+
+      {moodChunkId && (
+        <MoodPrompt
+          chunkId={moodChunkId}
+          eventType="review"
+          onComplete={() => setMoodChunkId(null)}
+        />
+      )}
     </div>
   );
 }

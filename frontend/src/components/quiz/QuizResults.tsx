@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { Trophy, Zap, RotateCcw, CheckCircle2, XCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import type { QuizResults as QuizResultsType, QuizSession } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { MoodPrompt } from '@/components/mood/MoodPrompt';
+import { tryShowMoodPrompt } from '@/lib/mood';
 
 interface QuizResultsProps {
   results: QuizResultsType;
@@ -10,6 +13,17 @@ interface QuizResultsProps {
 
 export function QuizResults({ results, session, onRestart }: QuizResultsProps) {
   const pct = Math.round((results.score / results.total) * 100);
+  const firstChunkId = session.questions[0]?.chunk_id ?? '';
+  const canPromptQuiz =
+    firstChunkId !== '' && !/^fallback-/.test(firstChunkId);
+  const [showMoodPrompt, setShowMoodPrompt] = useState(false);
+
+  useEffect(() => {
+    if (canPromptQuiz && tryShowMoodPrompt()) {
+      setShowMoodPrompt(true);
+    }
+  }, [canPromptQuiz]);
+
   const grade =
     pct >= 90 ? { label: 'Excellent', color: 'var(--good)' } :
     pct >= 70 ? { label: 'Strong session', color: 'var(--accent)' } :
@@ -68,6 +82,10 @@ export function QuizResults({ results, session, onRestart }: QuizResultsProps) {
           })}
         </div>
       </div>
+
+      {showMoodPrompt && (
+        <MoodPrompt chunkId={firstChunkId} eventType="quiz" />
+      )}
 
       <button type="button" onClick={onRestart} className="btn-primary w-full">
         <RotateCcw size={15} /> Quiz again

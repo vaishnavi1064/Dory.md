@@ -261,3 +261,46 @@ export async function gradeChunk(chunkId: string, grade: Grade): Promise<GradeRe
     body: JSON.stringify({ chunk_id: chunkId, grade }),
   });
 }
+
+// ── Account: export + delete ───────────────────────────────────────────────
+// These use the same token + 401-refresh pattern as ingestFile (not apiFetch),
+// because export needs the raw Blob (not JSON) and delete returns 204 No Content.
+
+export async function exportAccount(): Promise<Blob> {
+  const send = (tok: string | null) =>
+    fetch(`${config.apiBaseUrl}/api/account/export`, {
+      method: 'GET',
+      headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+    });
+
+  const token = getAccessToken();
+  let res = await send(token);
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) res = await send(newToken);
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`API ${res.status}: ${text}`);
+  }
+  return res.blob();
+}
+
+export async function deleteAccount(): Promise<void> {
+  const send = (tok: string | null) =>
+    fetch(`${config.apiBaseUrl}/api/account`, {
+      method: 'DELETE',
+      headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+    });
+
+  const token = getAccessToken();
+  let res = await send(token);
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) res = await send(newToken);
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`API ${res.status}: ${text}`);
+  }
+}

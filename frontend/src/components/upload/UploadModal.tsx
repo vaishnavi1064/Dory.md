@@ -1,10 +1,12 @@
 import { useState, useRef, useCallback, type DragEvent, type ChangeEvent } from 'react';
 import {
   Upload, X, CheckCircle2, AlertCircle,
-  Loader2, CloudUpload, Trash2,
+  Loader2, CloudUpload, Trash2, RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ingestText } from '@/lib/api';
+import { MoodPrompt } from '@/components/mood/MoodPrompt';
+import { tryShowMoodPrompt } from '@/lib/mood';
 
 interface UploadModalProps {
   onClose: () => void;
@@ -48,10 +50,38 @@ async function readFileAsText(file: File): Promise<string> {
   });
 }
 
+// The API layer throws `Error("API <status>: <body>")`. Pull the JSON body back
+// out and detect which error shape it is:
+//   - new structured shape: { failed: {filename, reason, ...}, skipped_files, message }
+//   - old shape:            { detail: "..." }   (backward compatible)
+// Returns a clean per-file reason plus the verbatim headline when present.
+function parseIngestError(err: unknown): { reason: string; headline?: string } {
+  const raw = err instanceof Error ? err.message : String(err);
+  const braceIdx = raw.indexOf('{');
+  if (braceIdx !== -1) {
+    try {
+      const body = JSON.parse(raw.slice(braceIdx));
+      if (body && typeof body === 'object') {
+        if ('failed' in body && 'skipped_files' in body) {
+          return { reason: body.failed?.reason ?? 'Vector store write failed', headline: body.message };
+        }
+        if ('detail' in body) {
+          return { reason: String(body.detail) };
+        }
+      }
+    } catch {
+      // not JSON — fall through to the raw message
+    }
+  }
+  return { reason: raw };
+}
+
 export function UploadModal({ onClose }: UploadModalProps) {
   const [queue, setQueue] = useState<QueuedFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [errorHeadline, setErrorHeadline] = useState('');
+  const [moodChunkId, setMoodChunkId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function addFiles(files: FileList | File[]) {
@@ -90,13 +120,16 @@ export function UploadModal({ onClose }: UploadModalProps) {
     e.target.value = '';
   }, []);
 
-  async function processAll() {
-    const pendingItems = queue.filter((f) => f.status === 'pending');
-    if (!pendingItems.length) return;
+  // Process a specific set of queued items by id. Used for both the initial
+  // upload (all pending) and retry (the previously-failed items, whose cached
+  // File objects are reused — the user never re-picks them).
+  async function runItems(items: QueuedFile[]) {
+    if (!items.length) return;
     setUploading(true);
+    setErrorHeadline('');
 
-    for (const item of pendingItems) {
-      setQueue((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: 'processing' } : f)));
+    for (const item of items) {
+      setQueue((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: 'processing', error: undefined } : f)));
       try {
         const ext = item.file.name.split('.').pop()?.toLowerCase();
         const content = ext === 'pdf' || ext === 'doc' || ext === 'docx'
@@ -104,12 +137,14 @@ export function UploadModal({ onClose }: UploadModalProps) {
           : await readFileAsText(item.file);
 
         await ingestText(content, 'file', item.file.name);
+        const res = await ingestText(content, 'file', item.file.name);
+        if (tryShowMoodPrompt()) setMoodChunkId(res.chunk_id);
         setQueue((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: 'done' } : f)));
       } catch (e) {
+        const { reason, headline } = parseIngestError(e);
+        if (headline) setErrorHeadline(headline);
         setQueue((prev) => prev.map((f) => (
-          f.id === item.id
-            ? { ...f, status: 'error', error: e instanceof Error ? e.message : 'Upload failed' }
-            : f
+          f.id === item.id ? { ...f, status: 'error', error: reason } : f
         )));
       }
     }
@@ -117,8 +152,17 @@ export function UploadModal({ onClose }: UploadModalProps) {
     setUploading(false);
   }
 
+  function processAll() {
+    void runItems(queue.filter((f) => f.status === 'pending'));
+  }
+
+  function retryFailed() {
+    void runItems(queue.filter((f) => f.status === 'error'));
+  }
+
   const pending = queue.filter((f) => f.status === 'pending').length;
   const done = queue.filter((f) => f.status === 'done').length;
+  const failedItems = queue.filter((f) => f.status === 'error');
   const allDone = queue.length > 0 && done === queue.length;
 
   return (
@@ -198,6 +242,36 @@ export function UploadModal({ onClose }: UploadModalProps) {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {failedItems.length > 0 && !uploading && (
+          <div className="px-5 pt-4">
+            <div className="app-card-muted p-3">
+              <p className="text-sm font-bold text-[var(--text-1)]">
+                {errorHeadline || `${failedItems.length} file${failedItems.length === 1 ? '' : 's'} couldn’t be ingested.`}
+              </p>
+              <div className="mt-2 space-y-1 text-xs text-[var(--text-3)]">
+                <p>✓ Ingested: {done} chunks</p>
+                {failedItems.map((f) => (
+                  <p key={f.id}>✗ Failed: {f.file.name} — {f.error}</p>
+                ))}
+                <p>↷ Skipped: 0 files</p>
+              </div>
+              <button type="button" onClick={retryFailed} className="btn-secondary mt-3">
+                <RefreshCw size={13} /> Retry failed and skipped files
+              </button>
+            </div>
+          </div>
+        )}
+
+        {moodChunkId && (
+          <div className="px-5">
+            <MoodPrompt
+              chunkId={moodChunkId}
+              eventType="create"
+              onComplete={() => setMoodChunkId(null)}
+            />
           </div>
         )}
 

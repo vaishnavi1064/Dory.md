@@ -71,6 +71,8 @@ def calculate_retention_batch(
     scores = np.clip(np.array(complexity_scores, dtype=np.float64), 0.0, 1.0)
     S = 1.0 + 0.5 * np.log1p(counts)
     k = 0.5 + 1.5 * scores
+    # Batch version mirrors the scalar formula in calculate_retention() above
+    # (R = exp(-t / (S * k * BASE))) — keep the two in sync.
     return np.exp(-t / (S * k * _BASE_HOURS))
 
 

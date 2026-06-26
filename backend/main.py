@@ -25,7 +25,8 @@ load_dotenv(Path(__file__).parent / ".env")
 from intelligence.embeddings import warm_model
 from database.db import get_connection, init_db, purge_expired_refresh_tokens
 from observability import setup_logging
-from routers import ai, auth, chunks, discovery, fading, health, ingest, quiz, review, search, seed, stats
+from ratelimit import global_limit_exceeded
+from routers import account, ai, auth, chunks, discovery, fading, health, ingest, meetings, mood, quiz, review, search, seed, stats
 from routers.auth import setup_demo_user
 from routers.deps import require_secret_configured
 from services.category_service import classify_all_uncategorized
@@ -45,29 +46,43 @@ async def lifespan(app: FastAPI):
     if os.getenv("DORY_SKIP_WARMUP") != "1":
         warm_model()
         threading.Thread(target=classify_all_uncategorized, daemon=True).start()
-    logger.info("Dory.md API started (env=%s)", os.getenv("DORY_ENV", "dev"))
+    logger.info("Dory.md API started (env=%s)", os.getenv("DORY_ENV", "production"))
     yield
 
 
 app = FastAPI(title="Dory.md API", version="1.0.0", lifespan=lifespan)
 
-# CORS: the default deliberately does NOT allow arbitrary public IPs (AUDIT P1-3).
-# It permits localhost/loopback and RFC-1918 private ranges for LAN dev, plus
-# *.vercel.app for preview deploys. Production should set CORS_ORIGIN_REGEX to an
-# explicit allow-list of its own origins.
-_CORS_REGEX = os.getenv(
-    "CORS_ORIGIN_REGEX",
-    r"https?://(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?"
-    r"|https://[\w-]+\.vercel\.app",
-)
+# CORS: explicit env-driven allow-list (AUDIT P1-3). Set DORY_CORS_ORIGINS to a
+# comma-separated list of exact origins in production, e.g.
+#   DORY_CORS_ORIGINS=https://dory-md-fork.vercel.app,https://app.dory.md
+# PUT/PATCH are kept because chunks support edit (PUT /chunks/{id}) and folder
+# move (PATCH /chunks/{id}/folder).
+_cors_origins = [
+    o.strip()
+    for o in os.environ.get("DORY_CORS_ORIGINS", "http://localhost:5173").split(",")
+    if o.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=_CORS_REGEX,
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+
+
+@app.middleware("http")
+async def global_rate_limit(request: Request, call_next):
+    """Global per-IP request cap (AUDIT P1-2), reusing the shared limiter store.
+    CORS preflight (OPTIONS) is exempt so the SPA's preflights don't burn budget.
+    Inert in dev; tune with DORY_GLOBAL_RATE_LIMIT_PER_MIN (default 100)."""
+    if request.method != "OPTIONS" and global_limit_exceeded(request):
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many requests. Please slow down."},
+        )
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -99,6 +114,9 @@ app.include_router(review.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
 app.include_router(quiz.router, prefix="/api")
 app.include_router(seed.router, prefix="/api")
+app.include_router(account.router, prefix="/api")
+app.include_router(mood.router, prefix="/api")
+app.include_router(meetings.router, prefix="/api")
 
 
 @app.get("/")

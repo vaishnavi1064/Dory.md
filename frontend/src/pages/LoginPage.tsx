@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, Brain, CheckCircle2, Activity, Search, BrainCircuit } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function LoginPage() {
   const { login, register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -14,6 +15,16 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Surface the post-account-deletion confirmation, then drop the query param
+  // so it doesn't persist on refresh or mode switch.
+  useEffect(() => {
+    if (searchParams.get('deleted') === '1') {
+      setSuccess('Your account has been deleted.');
+      searchParams.delete('deleted');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   function switchMode(next: 'login' | 'register') {
     setMode(next);
@@ -157,6 +168,13 @@ export function LoginPage() {
                 <div className="flex items-center gap-2 rounded-lg border border-[color-mix(in_oklab,var(--good)_25%,transparent)] bg-[color-mix(in_oklab,var(--good)_8%,transparent)] p-3 text-sm font-bold text-[var(--good)]">
                   <CheckCircle2 size={15} /> {success}
                 </div>
+              )}
+
+              {mode === 'register' && (
+                <p className="text-xs text-[var(--text-3)]">
+                  By signing up, you agree that note content may be sent to Groq for AI features.
+                  See our Privacy section in the README.
+                </p>
               )}
 
               <button type="submit" disabled={loading} className="btn-primary w-full">

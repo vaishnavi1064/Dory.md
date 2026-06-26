@@ -1,6 +1,6 @@
 import {
   Activity, Search, BrainCircuit, BookOpen,
-  CalendarDays, Timer,
+  CalendarDays, CalendarClock, Timer, Heart,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -32,7 +32,9 @@ export const navGroups: NavGroup[] = [
     label: 'Tools',
     items: [
       { to: '/calendar', label: 'Calendar', icon: CalendarDays },
+      { to: '/meetings', label: 'Meetings', icon: CalendarClock },
       { to: '/pomodoro', label: 'Focus',    icon: Timer },
+      { to: '/mood',     label: 'Mood',     icon: Heart },
     ],
   },
 ];

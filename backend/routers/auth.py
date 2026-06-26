@@ -25,10 +25,11 @@ from database.db import (
     set_user_password_hash,
     store_refresh_token,
 )
-from routers.deps import JWT_ALGORITHM, _get_secret, get_current_user_id
+from routers.deps import JWT_ALGORITHM, _get_secret, get_current_user_id, is_dev_env
 
 router = APIRouter()
 
+_DEMO_EMAIL = "demo@dory.md"
 _DEMO_PASSWORD = "demo123"
 ACCESS_TOKEN_TTL = timedelta(hours=1)
 REFRESH_TOKEN_TTL = timedelta(days=30)
@@ -135,6 +136,10 @@ def register(body: RegisterBody):
 
 @router.post("/auth/login", dependencies=[Depends(rate_limit("auth"))])
 def login(body: LoginBody):
+    # The demo account is a real seeded user; only allow it outside production so
+    # the public deployment can't be logged into with shared demo credentials.
+    if body.email == _DEMO_EMAIL and not is_dev_env():
+        raise HTTPException(status_code=401, detail="Demo account disabled in production.")
     user = get_user_by_email(body.email)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password.")

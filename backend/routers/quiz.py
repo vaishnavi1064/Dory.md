@@ -8,7 +8,7 @@ from intelligence.llm import FALLBACK_QUESTIONS, difficulty, generate_mcq
 from database.db import (
     complete_quiz_session,
     create_quiz_session,
-    get_lowest_retention_chunks,
+    get_stale_chunk_candidates,
     get_quiz_history,
     update_chunk_access_by,
 )
@@ -21,7 +21,13 @@ from models.schemas import (
     QuizSubmitResponse,
     QuizResultItem,
 )
+from routers._shared import parse_dt
 from routers.deps import get_current_user_id
+
+# How many candidate chunks to pull before re-ranking by true retention.
+_CANDIDATE_POOL = 50
+# How many questions a quiz contains.
+_QUIZ_SIZE = 5
 
 # In-memory store: {session_id: {question_id: {correct_index, chunk_id}}}
 # Process-scoped — see AUDIT P0-3 for the multi-worker limitation.
@@ -33,11 +39,10 @@ _FALLBACK_QUESTIONS = FALLBACK_QUESTIONS
 router = APIRouter()
 
 
-def _generate_question(chunk_id: str, content: str, access_count: int, complexity_score: float, source_file: str, category: str, fallback_q: dict) -> QuizQuestion:
+def _generate_question(chunk_id: str, content: str, complexity_score: float, source_file: str, category: str, retention: float, fallback_q: dict) -> QuizQuestion:
     """Compose the API quiz-question shape. The MCQ text/options come from the
-    intelligence layer; retention/difficulty are derived from the memory model.
+    intelligence layer; `retention` is the chunk's already-computed true retention.
     The backend owns only the wire-shape mapping."""
-    r = calculate_retention(datetime.now(tz=timezone.utc), access_count, complexity_score)
     mcq = generate_mcq(content, fallback_q)
     return QuizQuestion(
         id=chunk_id,
@@ -47,15 +52,34 @@ def _generate_question(chunk_id: str, content: str, access_count: int, complexit
         correct_index=mcq["correct_index"],
         difficulty=difficulty(complexity_score),
         category=category or "general",
-        retention=round(r, 4),
+        retention=round(retention, 4),
         source_file=source_file,
     )
 
 
 @router.post("/quiz/start", response_model=QuizStartResponse)
 def start_quiz(user_id: str = Depends(get_current_user_id)):
-    rows = get_lowest_retention_chunks(user_id, limit=5)
-    session_id = create_quiz_session(user_id, total=len(rows) or 5)
+    # Pull a cheap candidate pool, then re-rank by TRUE Ebbinghaus retention
+    # (which factors in stability from access_count AND the complexity modifier),
+    # not just the SQL last_accessed/access_count proxy. Lowest retention first.
+    candidates = get_stale_chunk_candidates(user_id, limit=_CANDIDATE_POOL)
+    scored = sorted(
+        (
+            (
+                calculate_retention(
+                    parse_dt(row["last_accessed"]),
+                    row["access_count"],
+                    row["complexity_score"],
+                ),
+                row,
+            )
+            for row in candidates
+        ),
+        key=lambda pair: pair[0],
+    )
+    selected = scored[:_QUIZ_SIZE]
+    rows = [row for _, row in selected]
+    session_id = create_quiz_session(user_id, total=len(rows) or _QUIZ_SIZE)
 
     now_iso = datetime.now(tz=timezone.utc).isoformat()
 
@@ -82,15 +106,15 @@ def start_quiz(user_id: str = Depends(get_current_user_id)):
 
     questions = []
     session_map = {}
-    for i, row in enumerate(rows):
+    for i, (retention, row) in enumerate(selected):
         fallback = _FALLBACK_QUESTIONS[i % len(_FALLBACK_QUESTIONS)]
         q = _generate_question(
             chunk_id=row["id"],
             content=row["content"],
-            access_count=row["access_count"],
             complexity_score=row["complexity_score"],
             source_file=row["source_file"],
             category=row["category"] or "general",
+            retention=retention,
             fallback_q=fallback,
         )
         questions.append(q)
