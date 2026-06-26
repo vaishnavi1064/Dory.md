@@ -16,6 +16,7 @@ import { MoodDashboard } from '@/pages/MoodDashboard';
 import { LoginPage } from '@/pages/LoginPage';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { MoodOnLoginPrompt } from '@/components/mood/MoodOnLoginPrompt';
 import { startWellnessScheduler, stopWellnessScheduler } from '@/lib/wellness';
 import { startMeetingScheduler, stopMeetingScheduler } from '@/lib/meetingScheduler';
 
@@ -101,6 +102,7 @@ function AnimatedRoutes() {
 export default function App() {
   return (
     <AuthProvider>
+      <MoodOnLoginPrompt />
       <AnimatedRoutes />
     </AuthProvider>
   );

@@ -238,7 +238,7 @@ function MoodTrackingSection() {
         <div>
           <p className="font-bold text-[var(--text-1)]">Ask about my mood</p>
           <p className="text-sm text-[var(--text-3)]">
-            After creating notes, reviewing chunks, or completing quizzes, Dory will ask how you&apos;re feeling. Always optional, never blocks.
+            After creating notes, reviewing chunks, or completing quizzes, Dory will ask how you&apos;re feeling. You&apos;ll also be asked when you log in. Always optional, never blocks.
           </p>
           <Link to="/mood" className="mt-2 inline-block text-sm font-bold text-[var(--accent)] hover:underline">
             View your mood patterns
@@ -259,8 +259,8 @@ function MoodTrackingSection() {
         <div>
           <p className="font-bold text-[var(--text-1)]">How often to ask</p>
           <p className="text-sm text-[var(--text-3)]">
-            Dory will only ask once every {cooldownHours} hours during normal use.
-            You can always log manually anytime.
+            Limits how often Dory asks during normal use (after uploads, reviews, quizzes).
+            Logging in always shows the mood prompt when tracking is on.
           </p>
         </div>
         <select

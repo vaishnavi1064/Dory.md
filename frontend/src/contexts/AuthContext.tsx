@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import { config } from '@/lib/config'
+import { scheduleMoodPromptOnLogin, MOOD_LOGIN_PROMPT_PENDING_KEY } from '@/lib/mood'
 import { storeTokens, clearTokens, getAccessToken, getRefreshToken } from '@/lib/tokens'
 
 export interface User {
@@ -41,12 +42,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(session)
     localStorage.setItem('dory-session', JSON.stringify(session))
     storeTokens(data.access_token, data.refresh_token)
+    scheduleMoodPromptOnLogin()
   }
 
   function adoptLocalDemo(email: string) {
     const session: User = { email, name: 'Demo User' }
     setUser(session)
     localStorage.setItem('dory-session', JSON.stringify(session))
+    scheduleMoodPromptOnLogin()
   }
 
   async function login(email: string, password: string): Promise<boolean> {
@@ -112,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null)
     localStorage.removeItem('dory-session')
+    sessionStorage.removeItem(MOOD_LOGIN_PROMPT_PENDING_KEY)
     clearTokens()
   }
 

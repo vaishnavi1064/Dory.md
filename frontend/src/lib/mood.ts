@@ -36,6 +36,7 @@ export const MOOD_CHART_COLORS: Record<Mood, string> = {
 export const MOOD_ASK_KEY = 'dory.mood.askEnabled';
 export const MOOD_LAST_ASKED_KEY = 'dory.mood.lastAsked';
 export const MOOD_COOLDOWN_KEY = 'dory.mood.cooldownHours';
+export const MOOD_LOGIN_PROMPT_PENDING_KEY = 'dory.mood.loginPromptPending';
 export const COOLDOWN_OPTIONS = [1, 4, 8, 12, 24] as const;
 export const DEFAULT_COOLDOWN_HOURS = 4;
 export const MOOD_CHANGED_EVENT = 'dory.mood.changed';
@@ -133,6 +134,11 @@ export function tryShowMoodPrompt(): boolean {
 
 export function notifyMoodChanged(): void {
   window.dispatchEvent(new CustomEvent(MOOD_CHANGED_EVENT));
+}
+
+/** Call after a successful login or registration to show the mood prompt once. */
+export function scheduleMoodPromptOnLogin(): void {
+  sessionStorage.setItem(MOOD_LOGIN_PROMPT_PENDING_KEY, '1');
 }
 
 export async function logMood(
