@@ -91,3 +91,27 @@ CREATE TABLE IF NOT EXISTS meetings (
 
 CREATE INDEX IF NOT EXISTS idx_meetings_user_starts
     ON meetings(user_id, starts_at);
+
+-- Knowledge-graph edges between chunks. Undirected: stored once with
+-- source_id < target_id (lexicographic on the TEXT uuid) and traversed from
+-- both columns. Edges live only here — ChromaDB is queried to discover
+-- neighbors but never stores edges, so there is no new dual-write concern.
+CREATE TABLE IF NOT EXISTS chunk_edges (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     TEXT NOT NULL,
+    source_id   TEXT NOT NULL,
+    target_id   TEXT NOT NULL,
+    weight      REAL NOT NULL,
+    edge_type   TEXT NOT NULL DEFAULT 'semantic',
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id)   REFERENCES users(id)  ON DELETE CASCADE,
+    FOREIGN KEY (source_id) REFERENCES chunks(id) ON DELETE CASCADE,
+    FOREIGN KEY (target_id) REFERENCES chunks(id) ON DELETE CASCADE,
+    UNIQUE (user_id, source_id, target_id),
+    CHECK (source_id < target_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chunk_edges_user_source
+    ON chunk_edges(user_id, source_id);
+CREATE INDEX IF NOT EXISTS idx_chunk_edges_user_target
+    ON chunk_edges(user_id, target_id);

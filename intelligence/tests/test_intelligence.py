@@ -12,9 +12,11 @@ from pathlib import Path
 
 from intelligence.domain import chunk_text, complexity_score
 from intelligence.memory import (
+    Neighbor,
     calculate_retention,
     calculate_retention_batch,
     classify_retention,
+    propagate_reinforcement,
 )
 from intelligence.ranking import (
     composite_score,
@@ -99,6 +101,79 @@ def test_complexity_score_in_range():
     code = "def f(x):\n    return x + 1\n"
     prose = "the the the the the the the the"
     assert complexity_score(code) > complexity_score(prose)
+
+
+# ── Spreading activation ──────────────────────────────────────────────────────
+
+def _n(chunk_id="c1", weight=1.0, stability_=10.0):
+    return Neighbor(chunk_id=chunk_id, edge_weight=weight, current_stability=stability_)
+
+
+def test_no_neighbors_returns_empty():
+    assert propagate_reinforcement(5.0, []) == {}
+
+
+def test_single_neighbor_scales_by_weight_and_alpha():
+    out = propagate_reinforcement(10.0, [_n(weight=0.5, stability_=2.0)], alpha=0.3)
+    # 2.0 + 10.0 * 0.5 * 0.3 = 3.5
+    assert out == {"c1": 3.5}
+
+
+def test_multiple_neighbors_each_scale_independently():
+    out = propagate_reinforcement(
+        4.0,
+        [_n("a", 1.0, 1.0), _n("b", 0.5, 1.0), _n("c", 0.25, 8.0)],
+        alpha=0.5,
+    )
+    assert out["a"] == 1.0 + 4.0 * 1.0 * 0.5
+    assert out["b"] == 1.0 + 4.0 * 0.5 * 0.5
+    assert out["c"] == 8.0 + 4.0 * 0.25 * 0.5
+    assert set(out) == {"a", "b", "c"}
+
+
+def test_clamped_at_max_stability():
+    out = propagate_reinforcement(100.0, [_n(weight=1.0, stability_=9.0)], alpha=1.0, max_stability=10.0)
+    assert out == {"c1": 10.0}
+
+
+def test_never_returns_below_current_stability():
+    # A neighbor already above the ceiling is left alone, not dragged down.
+    out = propagate_reinforcement(5.0, [_n(weight=1.0, stability_=50.0)], alpha=1.0, max_stability=10.0)
+    assert out == {}
+
+    many = [_n("a", 1.0, 1.0), _n("b", 0.0, 7.0), _n("c", 0.3, 2.0)]
+    for chunk_id, new_stability in propagate_reinforcement(3.0, many).items():
+        current = next(n.current_stability for n in many if n.chunk_id == chunk_id)
+        assert new_stability >= current
+
+
+def test_negative_gain_does_not_punish_neighbors():
+    # FSRS returns a negative delta-S for grade 1 (Again); it must not propagate.
+    assert propagate_reinforcement(-4.0, [_n(weight=1.0, stability_=3.0)], alpha=1.0) == {}
+
+
+def test_zero_gain_and_zero_weight_are_no_ops():
+    assert propagate_reinforcement(0.0, [_n()]) == {}
+    assert propagate_reinforcement(5.0, [_n(weight=0.0)]) == {}
+    assert propagate_reinforcement(5.0, [_n()], alpha=0.0) == {}
+
+
+def test_out_of_range_weight_and_alpha_are_clamped():
+    over = propagate_reinforcement(10.0, [_n(weight=5.0, stability_=0.0)], alpha=9.0)
+    assert over == {"c1": 10.0}  # weight and alpha both clamp to 1.0
+    under = propagate_reinforcement(10.0, [_n(weight=-2.0, stability_=1.0)], alpha=-1.0)
+    assert under == {}
+
+
+def test_deterministic_for_identical_inputs():
+    args = (7.5, [_n("a", 0.8, 1.5), _n("b", 0.62, 4.0)], 0.3, 20.0)
+    assert propagate_reinforcement(*args) == propagate_reinforcement(*args)
+
+
+def test_single_hop_only_ignores_neighbor_of_neighbor():
+    # The function sees a flat list; it must reinforce exactly those ids and no others.
+    out = propagate_reinforcement(6.0, [_n("direct", 1.0, 1.0)], alpha=0.3)
+    assert list(out) == ["direct"]
 
 
 # ── Architectural boundary ────────────────────────────────────────────────────
