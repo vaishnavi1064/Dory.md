@@ -60,7 +60,6 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_chunks_user ON chunks(user_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_retention ON chunks(last_accessed, access_count);
-CREATE INDEX IF NOT EXISTS idx_chunks_retention_anchor ON chunks(user_id, retention_anchor, access_count);
 CREATE INDEX IF NOT EXISTS idx_chunks_fsrs_due ON chunks(user_id, fsrs_due);
 CREATE INDEX IF NOT EXISTS idx_access_log_chunk ON access_log(chunk_id, accessed_at);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);

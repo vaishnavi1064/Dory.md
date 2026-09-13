@@ -61,10 +61,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
             "UPDATE chunks SET retention_anchor = COALESCE(last_accessed, created_at) "
             "WHERE retention_anchor IS NULL"
         )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_chunks_retention_anchor "
-            "ON chunks(user_id, retention_anchor, access_count)"
-        )
+
+    # Indexed here rather than in schema.sql: executescript() runs before this
+    # function, so on an existing database the column does not exist yet.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chunks_retention_anchor "
+        "ON chunks(user_id, retention_anchor, access_count)"
+    )
 
     user_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
     if "name" not in user_cols:
