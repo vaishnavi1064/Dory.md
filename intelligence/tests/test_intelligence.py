@@ -13,10 +13,12 @@ from pathlib import Path
 from intelligence.domain import chunk_text, complexity_score
 from intelligence.memory import (
     Neighbor,
+    RetentionNeighbor,
     calculate_retention,
     calculate_retention_batch,
     classify_retention,
     propagate_reinforcement,
+    propagate_retention_refresh,
 )
 from intelligence.ranking import (
     composite_score,
@@ -174,6 +176,79 @@ def test_single_hop_only_ignores_neighbor_of_neighbor():
     # The function sees a flat list; it must reinforce exactly those ids and no others.
     out = propagate_reinforcement(6.0, [_n("direct", 1.0, 1.0)], alpha=0.3)
     assert list(out) == ["direct"]
+
+
+# ── Retention refresh ─────────────────────────────────────────────────────────
+
+def _rn(chunk_id="c1", weight=1.0, hours_ago=100.0, now=None):
+    now = now or datetime.now(timezone.utc)
+    return RetentionNeighbor(
+        chunk_id=chunk_id, edge_weight=weight, current_anchor=now - timedelta(hours=hours_ago)
+    )
+
+
+def test_retention_refresh_no_neighbors_returns_empty():
+    assert propagate_retention_refresh([], datetime.now(timezone.utc)) == {}
+
+
+def test_retention_refresh_advances_by_weight_times_alpha():
+    now = datetime.now(timezone.utc)
+    n = _rn(weight=0.5, hours_ago=100, now=now)
+    out = propagate_retention_refresh([n], now, alpha=0.4)
+    # s = 0.5 * 0.4 = 0.2, so the anchor closes 20% of the 100-hour gap.
+    moved = (out["c1"] - n.current_anchor).total_seconds() / 3600
+    assert abs(moved - 20.0) < 1e-6
+
+
+def test_retention_refresh_never_moves_backwards_or_past_now():
+    now = datetime.now(timezone.utc)
+    neighbors = [_rn("a", 1.0, 50, now), _rn("b", 0.3, 200, now), _rn("c", 0.7, 5, now)]
+    out = propagate_retention_refresh(neighbors, now, alpha=1.0)
+    for n in neighbors:
+        assert n.current_anchor < out[n.chunk_id] <= now
+
+
+def test_retention_refresh_full_only_at_alpha_and_weight_one():
+    now = datetime.now(timezone.utc)
+    assert propagate_retention_refresh([_rn(weight=1.0, now=now)], now, alpha=1.0)["c1"] == now
+    partial = propagate_retention_refresh([_rn(weight=1.0, now=now)], now, alpha=0.99)["c1"]
+    assert partial < now
+
+
+def test_retention_refresh_skips_anchors_already_at_now():
+    now = datetime.now(timezone.utc)
+    assert propagate_retention_refresh([_rn(hours_ago=0, now=now)], now) == {}
+    # A future anchor (clock skew) must not be dragged backwards.
+    future = RetentionNeighbor("c1", 1.0, now + timedelta(hours=5))
+    assert propagate_retention_refresh([future], now) == {}
+
+
+def test_retention_refresh_zero_weight_or_alpha_is_a_noop():
+    now = datetime.now(timezone.utc)
+    assert propagate_retention_refresh([_rn(weight=0.0, now=now)], now) == {}
+    assert propagate_retention_refresh([_rn(now=now)], now, alpha=0.0) == {}
+
+
+def test_retention_refresh_clamps_out_of_range_inputs():
+    now = datetime.now(timezone.utc)
+    over = propagate_retention_refresh([_rn(weight=9.0, now=now)], now, alpha=9.0)
+    assert over["c1"] == now  # both clamp to 1.0
+    assert propagate_retention_refresh([_rn(weight=-2.0, now=now)], now, alpha=-1.0) == {}
+
+
+def test_retention_refresh_is_deterministic():
+    now = datetime.now(timezone.utc)
+    args = ([_rn("a", 0.8, 30, now), _rn("b", 0.45, 90, now)], now, 0.3)
+    assert propagate_retention_refresh(*args) == propagate_retention_refresh(*args)
+
+
+def test_retention_refresh_raises_retention_but_not_to_full():
+    """The whole point: a refreshed anchor produces higher Ebbinghaus retention."""
+    now = datetime.now(timezone.utc)
+    n = _rn(weight=1.0, hours_ago=240, now=now)
+    before = calculate_retention(n.current_anchor, 0, 0.5)
+    after = calculate_retention(propagate_retention_refresh([n], now, alpha=0.3)["c1"], 0, 0.5)
+    assert before < after < 1.0
 
 
 # ── Architectural boundary ────────────────────────────────────────────────────

@@ -19,6 +19,11 @@ CREATE TABLE IF NOT EXISTS chunks (
     last_accessed DATETIME DEFAULT CURRENT_TIMESTAMP,
     access_count INTEGER DEFAULT 0,
     folder TEXT DEFAULT NULL,
+    -- Timestamp the Ebbinghaus curve decays from. Normally equal to
+    -- last_accessed, but spreading activation advances it fractionally
+    -- without claiming the note was actually viewed. NULL falls back to
+    -- last_accessed. See intelligence/memory/spreading.py.
+    retention_anchor DATETIME,
     -- FSRS-4 spaced-repetition state (1 = Learning). See intelligence/memory/scheduler.py.
     fsrs_due TEXT,
     fsrs_state INTEGER DEFAULT 1,
@@ -55,6 +60,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_chunks_user ON chunks(user_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_retention ON chunks(last_accessed, access_count);
+CREATE INDEX IF NOT EXISTS idx_chunks_retention_anchor ON chunks(user_id, retention_anchor, access_count);
 CREATE INDEX IF NOT EXISTS idx_chunks_fsrs_due ON chunks(user_id, fsrs_due);
 CREATE INDEX IF NOT EXISTS idx_access_log_chunk ON access_log(chunk_id, accessed_at);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);

@@ -8,7 +8,7 @@ import numpy as np
 from intelligence.memory import calculate_retention_batch, classify_retention
 from database.db import get_all_chunks
 from models.schemas import CategoryHealth, HealthResponse
-from routers._shared import parse_dt
+from routers._shared import retention_anchor
 from routers.deps import get_current_user_id
 
 router = APIRouter()
@@ -31,7 +31,7 @@ def get_health(
             time_offset_hours=time_offset_hours,
         )
 
-    last_accessed_list = [parse_dt(r["last_accessed"]) for r in rows]
+    last_accessed_list = [retention_anchor(r) for r in rows]
     access_counts = [r["access_count"] for r in rows]
     complexity_scores = [r["complexity_score"] for r in rows]
     categories = [r["category"] or "Uncategorized" for r in rows]

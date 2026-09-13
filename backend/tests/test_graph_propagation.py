@@ -6,6 +6,7 @@ produces a real, measurable gain rather than the undefined first-review case.
 """
 
 import math
+from datetime import datetime
 
 from core import graph_edges
 from database.db import (
@@ -38,6 +39,12 @@ def seed_fsrs(chunk_id: str, user_id: str, stability: float, difficulty: float =
 
 def stability_of(chunk_id: str, user_id: str):
     return get_chunk(chunk_id, user_id)["fsrs_stability"]
+
+
+def anchor_of(chunk_id: str, user_id: str):
+    """The timestamp retention decays from — distinct from last_accessed."""
+    row = get_chunk(chunk_id, user_id)
+    return datetime.fromisoformat(row["retention_anchor"] or row["last_accessed"])
 
 
 def grade(client, token, chunk_id, value=4):
@@ -103,19 +110,26 @@ def test_chunk_with_no_edges_reinforces_nothing(client, register_user):
     assert stability_of(lonely, uid) == 3.0
 
 
-def test_first_review_propagates_nothing(client, register_user):
-    """A never-graded chunk has no prior stability, so there is no gain to share."""
+def test_first_review_spreads_retention_but_not_stability(client, register_user):
+    """The two halves of spreading activation fire on different triggers.
+
+    A never-graded chunk has no prior stability, so there is no gain to share —
+    but the recall still succeeded, so the retention half does move. This is the
+    case that makes the feature visible on a corpus that has never been graded.
+    """
     _, token = register_user()
     uid = _user_id_from(token)
     a, b = make_chunk(uid, 0.0), make_chunk(uid, 0.1)
     upsert_edge(uid, a, b, weight=1.0)
     assert stability_of(a, uid) is None
 
+    before_anchor = anchor_of(b, uid)
     res = grade(client, token, a, 4)
 
     assert res.status_code == 200
-    assert res.json()["reinforced_neighbor_count"] == 0
-    assert stability_of(b, uid) is None
+    assert stability_of(b, uid) is None, "no stability gain to propagate on a first review"
+    assert anchor_of(b, uid) > before_anchor, "retention still refreshes on a first pass"
+    assert res.json()["reinforced_neighbor_count"] == 1
 
 
 def test_failed_review_does_not_reduce_neighbors(client, register_user):

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Query
 from intelligence.memory import calculate_retention, classify_retention
 from database.db import get_all_chunks
 from models.schemas import ChunkOut, FadingResponse
-from routers._shared import parse_dt, time_ago
+from routers._shared import parse_dt, retention_anchor, time_ago
 from routers.deps import get_current_user_id
 
 router = APIRouter()
@@ -19,7 +19,7 @@ def get_fading(
 
     for row in rows:
         last_accessed = parse_dt(row["last_accessed"])
-        r = calculate_retention(last_accessed, row["access_count"], row["complexity_score"])
+        r = calculate_retention(retention_anchor(row), row["access_count"], row["complexity_score"])
         if r < 0.8:
             results.append(
                 ChunkOut(

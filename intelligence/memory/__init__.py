@@ -11,7 +11,12 @@ from intelligence.memory.ebbinghaus import (
     stability,
 )
 from intelligence.memory.scheduler import VALID_GRADES, grade
-from intelligence.memory.spreading import Neighbor, propagate_reinforcement
+from intelligence.memory.spreading import (
+    Neighbor,
+    RetentionNeighbor,
+    propagate_reinforcement,
+    propagate_retention_refresh,
+)
 
 __all__ = [
     "calculate_retention",
@@ -26,4 +31,6 @@ __all__ = [
     "VALID_GRADES",
     "Neighbor",
     "propagate_reinforcement",
+    "RetentionNeighbor",
+    "propagate_retention_refresh",
 ]

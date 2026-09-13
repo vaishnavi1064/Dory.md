@@ -20,7 +20,7 @@ from models.schemas import (
     FolderRequest,
     UpdateChunkRequest,
 )
-from routers._shared import parse_dt, time_ago
+from routers._shared import parse_dt, retention_anchor, time_ago
 from routers.deps import get_current_user_id
 from intelligence.retrieval import delete_chunk as chroma_delete
 from intelligence.retrieval import upsert_chunk as chroma_upsert
@@ -57,7 +57,8 @@ def get_chunks(
 
     for row in rows:
         last_accessed = parse_dt(row["last_accessed"])
-        r = calculate_retention(last_accessed, row["access_count"], row["complexity_score"])
+        # Retention decays from the anchor; the displayed time stays the real access.
+        r = calculate_retention(retention_anchor(row), row["access_count"], row["complexity_score"])
         results.append(
             ChunkOut(
                 chunk_id=row["id"],

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 
 from intelligence.memory import calculate_retention
 from database.db import get_all_chunks
-from routers._shared import parse_dt, to_chunk_full
+from routers._shared import parse_dt, retention_anchor, to_chunk_full
 from routers.deps import get_current_user_id
 
 router = APIRouter()
@@ -34,7 +34,7 @@ def get_discovery(user_id: str = Depends(get_current_user_id)):
     for row in rows:
         row = dict(row)
         last_accessed = parse_dt(row["last_accessed"])
-        r = calculate_retention(last_accessed, row["access_count"], row["complexity_score"])
+        r = calculate_retention(retention_anchor(row), row["access_count"], row["complexity_score"])
         if 0.1 <= r <= 0.65 and r < best_retention:
             best_retention = r
             best_row = row

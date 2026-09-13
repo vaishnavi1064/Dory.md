@@ -16,6 +16,21 @@ def parse_dt(s: str) -> datetime:
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
 
+def retention_anchor(row) -> datetime:
+    """The timestamp a chunk's forgetting curve decays from.
+
+    Normally equal to last_accessed. Spreading activation advances it
+    fractionally on a successful recall of a linked note, which is why retention
+    reads this and the user-visible "last viewed" still reads last_accessed.
+    Falls back to last_accessed for rows written before the column existed.
+    """
+    try:
+        raw = row["retention_anchor"]
+    except (IndexError, KeyError):
+        raw = None
+    return parse_dt(raw or row["last_accessed"])
+
+
 def time_ago(dt: datetime) -> str:
     """Render a tz-aware datetime as a coarse 'Nh / Nd / Nmo ago' string."""
     delta = datetime.now(tz=timezone.utc) - dt

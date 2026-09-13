@@ -25,7 +25,7 @@ from models.schemas import (
     GraphRebuildResponse,
     GraphResponse,
 )
-from routers._shared import parse_dt
+from routers._shared import retention_anchor
 from routers.deps import get_current_user_id
 
 router = APIRouter()
@@ -42,7 +42,7 @@ def _label(content: str) -> str:
 
 def _retention_of(row) -> float:
     return calculate_retention(
-        parse_dt(row["last_accessed"]), row["access_count"], row["complexity_score"]
+        retention_anchor(row), row["access_count"], row["complexity_score"]
     )
 
 

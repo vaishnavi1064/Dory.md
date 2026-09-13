@@ -52,6 +52,20 @@ def _migrate(conn: sqlite3.Connection) -> None:
             "CREATE INDEX IF NOT EXISTS idx_chunks_fsrs_due ON chunks(user_id, fsrs_due)"
         )
 
+    # Retention anchor: the timestamp the forgetting curve decays from. Kept
+    # separate from last_accessed so spreading activation can partially refresh
+    # a neighbour's retention without falsifying its user-visible "last viewed".
+    if "retention_anchor" not in chunk_cols:
+        conn.execute("ALTER TABLE chunks ADD COLUMN retention_anchor DATETIME")
+        conn.execute(
+            "UPDATE chunks SET retention_anchor = COALESCE(last_accessed, created_at) "
+            "WHERE retention_anchor IS NULL"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chunks_retention_anchor "
+            "ON chunks(user_id, retention_anchor, access_count)"
+        )
+
     user_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
     if "name" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN name TEXT")
@@ -191,8 +205,8 @@ def insert_chunk(
     conn.execute(
         """INSERT INTO chunks
            (id, user_id, source_file, content, complexity_score,
-            created_at, last_accessed, access_count, fsrs_due, fsrs_state, fsrs_step)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            created_at, last_accessed, retention_anchor, access_count, fsrs_due, fsrs_state, fsrs_step)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             chunk_id,
             user_id,
@@ -200,6 +214,8 @@ def insert_chunk(
             content,
             complexity_score,
             created_iso,
+            last_accessed_iso,
+            # A new chunk has never decayed, so its anchor starts at last_accessed.
             last_accessed_iso,
             access_count,
             fsrs_due_iso,
@@ -244,7 +260,7 @@ def get_stale_chunk_candidates(user_id: str = DEFAULT_USER_ID, limit: int = 50) 
     conn = _connect()
     rows = conn.execute(
         """SELECT * FROM chunks WHERE user_id = ?
-           ORDER BY last_accessed ASC, access_count ASC
+           ORDER BY COALESCE(retention_anchor, last_accessed) ASC, access_count ASC
            LIMIT ?""",
         (user_id, limit),
     ).fetchall()
@@ -285,15 +301,20 @@ def apply_fsrs_update_with_propagation(
     user_id: str,
     fsrs: dict,
     neighbor_stabilities: Optional[dict] = None,
+    neighbor_anchors: Optional[dict] = None,
 ) -> bool:
     """Persist the reviewed chunk's FSRS state and any propagated neighbour
-    stability in ONE transaction.
+    stability and retention anchors in ONE transaction.
 
     Spreading activation must not be able to half-apply: either the review and
-    every reinforced neighbour land together, or neither does. Both writes are
+    every reinforced neighbour land together, or neither does. Every write is
     scoped to user_id, so a neighbour id that is not the caller's simply matches
     no row. Returns True if the reviewed chunk exists and belongs to the user.
+
+    Neighbour anchors move retention only — last_accessed is deliberately left
+    alone, because it is shown to the user as the real "last viewed" time.
     """
+    now_iso = datetime.now(timezone.utc).isoformat()
     conn = _connect()
     try:
         cursor = conn.execute(
@@ -305,6 +326,7 @@ def apply_fsrs_update_with_propagation(
                       fsrs_due = ?,
                       fsrs_last_review = ?,
                       last_accessed = ?,
+                      retention_anchor = ?,
                       access_count = access_count + 1
                 WHERE id = ? AND user_id = ?""",
             (
@@ -314,7 +336,8 @@ def apply_fsrs_update_with_propagation(
                 fsrs["fsrs_difficulty"],
                 fsrs["fsrs_due"],
                 fsrs["fsrs_last_review"],
-                datetime.now(timezone.utc).isoformat(),
+                now_iso,
+                now_iso,
                 chunk_id,
                 user_id,
             ),
@@ -327,6 +350,12 @@ def apply_fsrs_update_with_propagation(
             conn.execute(
                 "UPDATE chunks SET fsrs_stability = ? WHERE id = ? AND user_id = ?",
                 (float(new_stability), neighbor_id, user_id),
+            )
+
+        for neighbor_id, new_anchor in (neighbor_anchors or {}).items():
+            conn.execute(
+                "UPDATE chunks SET retention_anchor = ? WHERE id = ? AND user_id = ?",
+                (new_anchor, neighbor_id, user_id),
             )
 
         conn.commit()
@@ -348,8 +377,9 @@ def update_chunk_access(chunk_id: str, user_id: str, source: str = "manual") -> 
     conn = _connect()
     now = datetime.now(timezone.utc).isoformat()
     cursor = conn.execute(
-        "UPDATE chunks SET access_count = access_count + 1, last_accessed = ? WHERE id = ? AND user_id = ?",
-        (now, chunk_id, user_id),
+        "UPDATE chunks SET access_count = access_count + 1, last_accessed = ?, retention_anchor = ? "
+        "WHERE id = ? AND user_id = ?",
+        (now, now, chunk_id, user_id),
     )
     if cursor.rowcount == 0:
         conn.close()
@@ -372,8 +402,9 @@ def update_chunk_access_by(chunk_id: str, delta: int, user_id: str, source: str 
     conn = _connect()
     now = datetime.now(timezone.utc).isoformat()
     cursor = conn.execute(
-        "UPDATE chunks SET access_count = access_count + ?, last_accessed = ? WHERE id = ? AND user_id = ?",
-        (delta, now, chunk_id, user_id),
+        "UPDATE chunks SET access_count = access_count + ?, last_accessed = ?, retention_anchor = ? "
+        "WHERE id = ? AND user_id = ?",
+        (delta, now, now, chunk_id, user_id),
     )
     if cursor.rowcount == 0:
         conn.close()
@@ -917,6 +948,7 @@ def get_chunk_neighbors(chunk_id: str, user_id: str) -> list[sqlite3.Row]:
                   c.source_file      AS source_file,
                   c.fsrs_stability   AS fsrs_stability,
                   c.last_accessed    AS last_accessed,
+                  c.retention_anchor AS retention_anchor,
                   c.access_count     AS access_count,
                   c.complexity_score AS complexity_score
              FROM chunk_edges e

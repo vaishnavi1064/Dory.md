@@ -8,7 +8,7 @@ from intelligence.ranking import composite_score, recency_bonus
 from intelligence.retrieval import query_similar
 from database.db import get_chunk
 from models.schemas import SearchRequest, SearchResponse, SearchResult
-from routers._shared import parse_dt, time_ago, to_chunk_full
+from routers._shared import parse_dt, retention_anchor, time_ago, to_chunk_full
 from routers.deps import get_current_user_id
 
 router = APIRouter()
@@ -38,7 +38,7 @@ def context_search(body: SearchRequest, user_id: str = Depends(get_current_user_
         if row is None:
             continue
         last_accessed = parse_dt(row["last_accessed"])
-        r = calculate_retention(last_accessed, row["access_count"], row["complexity_score"])
+        r = calculate_retention(retention_anchor(row), row["access_count"], row["complexity_score"])
         recency = _recency_bonus(row["created_at"])
         composite = composite_score(sim, r, recency)
         scored.append((composite, r, dict(row)))
@@ -100,7 +100,7 @@ def search_get(
         if row is None:
             continue
         last_accessed = parse_dt(row["last_accessed"])
-        r = calculate_retention(last_accessed, row["access_count"], row["complexity_score"])
+        r = calculate_retention(retention_anchor(row), row["access_count"], row["complexity_score"])
         recency = _recency_bonus(row["created_at"])
         composite = composite_score(sim, r, recency)
         scored.append((composite, r, dict(row), sim))

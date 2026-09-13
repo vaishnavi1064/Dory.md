@@ -30,6 +30,7 @@ a NULL `fsrs_stability` to a float before building a Neighbor.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -84,3 +85,61 @@ def propagate_reinforcement(
             reinforced[n.chunk_id] = new_stability
 
     return reinforced
+
+
+@dataclass(frozen=True)
+class RetentionNeighbor:
+    """One edge-adjacent chunk, for the retention half of spreading activation."""
+
+    chunk_id: str
+    edge_weight: float  # 0.0 - 1.0
+    current_anchor: datetime  # the timestamp its forgetting curve decays from
+
+
+def propagate_retention_refresh(
+    neighbors: list[RetentionNeighbor],
+    now: datetime,
+    alpha: float = 0.3,
+) -> dict[str, datetime]:
+    """Partially refresh neighbours' retention after a successful recall.
+
+    Retention decays from an anchor timestamp, so reinforcing it means moving
+    that anchor closer to now. Each neighbour advances a fraction
+    s = edge_weight * alpha of the remaining distance:
+
+        new_anchor = old_anchor + s * (now - old_anchor)
+
+    Because s is clamped to 0..1 the result can never move backwards and never
+    passes `now`, so retention rises by a fraction of a full review without a
+    neighbour ever looking more recently reviewed than it is. s reaches 1 — a
+    full refresh — only if alpha and edge_weight are both exactly 1.
+
+    Unlike the stability half of spreading activation this is driven by recall
+    success rather than by a stability gain, so a chunk's *first* successful
+    review already refreshes its neighbours.
+
+    Returns {chunk_id: new_anchor} for neighbours that moved; neighbours whose
+    anchor is already at or ahead of `now` are omitted. Never raises on empty
+    input. Pure: imports nothing from `backend`.
+    """
+    if not neighbors:
+        return {}
+
+    a = _clamp01(alpha)
+    if a == 0.0:
+        return {}
+
+    refreshed: dict[str, datetime] = {}
+    for n in neighbors:
+        s = _clamp01(n.edge_weight) * a
+        if s <= 0.0:
+            continue
+
+        remaining = now - n.current_anchor
+        if remaining.total_seconds() <= 0:
+            # Already at (or somehow ahead of) now; nothing to refresh.
+            continue
+
+        refreshed[n.chunk_id] = n.current_anchor + remaining * s
+
+    return refreshed

@@ -21,7 +21,7 @@ from models.schemas import (
     QuizSubmitResponse,
     QuizResultItem,
 )
-from routers._shared import parse_dt
+from routers._shared import retention_anchor
 from routers.deps import get_current_user_id
 
 # How many candidate chunks to pull before re-ranking by true retention.
@@ -67,7 +67,7 @@ def start_quiz(user_id: str = Depends(get_current_user_id)):
         (
             (
                 calculate_retention(
-                    parse_dt(row["last_accessed"]),
+                    retention_anchor(row),
                     row["access_count"],
                     row["complexity_score"],
                 ),
