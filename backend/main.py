@@ -26,7 +26,7 @@ from intelligence.embeddings import warm_model
 from database.db import get_connection, init_db, purge_expired_refresh_tokens
 from observability import setup_logging
 from ratelimit import global_limit_exceeded
-from routers import account, ai, auth, chunks, discovery, fading, health, ingest, meetings, mood, quiz, review, search, seed, stats
+from routers import account, ai, auth, chunks, discovery, fading, graph, health, ingest, meetings, mood, quiz, review, search, seed, stats
 from routers.auth import setup_demo_user
 from routers.deps import require_secret_configured
 from services.category_service import classify_all_uncategorized
@@ -117,6 +117,7 @@ app.include_router(seed.router, prefix="/api")
 app.include_router(account.router, prefix="/api")
 app.include_router(mood.router, prefix="/api")
 app.include_router(meetings.router, prefix="/api")
+app.include_router(graph.router, prefix="/api")
 
 
 @app.get("/")

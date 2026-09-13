@@ -302,3 +302,39 @@ class UpdateMeetingRequest(BaseModel):
     link: Optional[str] = None
     notes: Optional[str] = None
     location: Optional[str] = None
+
+
+# ── Knowledge graph ───────────────────────────────────────────────────────────
+
+class GraphNode(BaseModel):
+    id: str
+    label: str              # short content preview shown on the node
+    retention: float
+    bucket: str             # strong | fading | weak | critical
+    degree: int             # edge count, used for node size
+
+
+class GraphEdge(BaseModel):
+    source: str
+    target: str
+    weight: float
+    type: str               # semantic | manual
+
+
+class GraphResponse(BaseModel):
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+
+
+class GraphNeighbor(BaseModel):
+    chunk_id: str
+    label: str
+    weight: float
+    type: str
+    retention: float
+    bucket: str
+
+
+class GraphRebuildResponse(BaseModel):
+    edges_created: int
+    edges_total: int
