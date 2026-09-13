@@ -12,11 +12,13 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from intelligence.memory import calculate_retention
-from intelligence.memory import VALID_GRADES, grade as fsrs_grade
+from intelligence.memory import Neighbor, VALID_GRADES, grade as fsrs_grade, propagate_reinforcement
+from core.graph_edges import spread_alpha
 from database.db import (
-    apply_fsrs_update,
+    apply_fsrs_update_with_propagation,
     count_due_chunks,
     get_chunk,
+    get_chunk_neighbors,
     get_review_queue,
     update_chunk_access,
 )
@@ -68,8 +70,21 @@ def review_grade(body: GradeRequest, user_id: str = Depends(get_current_user_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Chunk not found.")
 
+    stability_before = row["fsrs_stability"]
     fsrs = fsrs_grade(row, body.grade)
-    if not apply_fsrs_update(body.chunk_id, user_id, fsrs):
+
+    # Spreading activation: share a damped slice of this review's stability gain
+    # with the chunk's graph neighbours. A first review has no prior stability to
+    # measure a gain against, so nothing propagates until a chunk's second grade.
+    reinforced = _reinforce_neighbors(
+        chunk_id=body.chunk_id,
+        user_id=user_id,
+        stability_before=stability_before,
+        stability_after=fsrs["fsrs_stability"],
+    )
+
+    # One transaction: the review and every reinforced neighbour land together.
+    if not apply_fsrs_update_with_propagation(body.chunk_id, user_id, fsrs, reinforced):
         # Should never happen since we just read it above with the same user_id.
         raise HTTPException(status_code=404, detail="Chunk not found.")
 
@@ -80,6 +95,45 @@ def review_grade(body: GradeRequest, user_id: str = Depends(get_current_user_id)
         stability=fsrs["fsrs_stability"],
         difficulty=fsrs["fsrs_difficulty"],
         state=fsrs["fsrs_state"],
+        reinforced_neighbor_count=len(reinforced),
+    )
+
+
+def _reinforce_neighbors(
+    chunk_id: str,
+    user_id: str,
+    stability_before,
+    stability_after,
+) -> dict:
+    """Work out each neighbour's new stability after a review.
+
+    Returns {chunk_id: new_stability} for neighbours that gained, or {} when
+    there is nothing to spread. Does not write — the caller persists this in the
+    same transaction as the review itself.
+    """
+    if stability_before is None or stability_after is None:
+        return {}
+
+    gain = stability_after - stability_before
+    if gain <= 0:
+        # A failed review (grade 1) lowers stability; that loss is the reviewer's
+        # alone and is not propagated to neighbours.
+        return {}
+
+    neighbors = [
+        Neighbor(
+            chunk_id=r["neighbor_id"],
+            edge_weight=r["weight"],
+            # A neighbour that has never been graded has no stability yet.
+            current_stability=r["fsrs_stability"] or 0.0,
+        )
+        for r in get_chunk_neighbors(chunk_id, user_id)
+    ]
+    if not neighbors:
+        return {}
+
+    return propagate_reinforcement(
+        gain, neighbors, alpha=spread_alpha(), max_stability=None
     )
 
 

@@ -280,42 +280,68 @@ def count_due_chunks(user_id: str, now_iso: Optional[str] = None) -> int:
     return row[0]
 
 
-def apply_fsrs_update(chunk_id: str, user_id: str, fsrs: dict) -> bool:
-    """Persist the FSRS state returned by the scheduler. Returns True if the
-    chunk exists and belongs to the user."""
+def apply_fsrs_update_with_propagation(
+    chunk_id: str,
+    user_id: str,
+    fsrs: dict,
+    neighbor_stabilities: Optional[dict] = None,
+) -> bool:
+    """Persist the reviewed chunk's FSRS state and any propagated neighbour
+    stability in ONE transaction.
+
+    Spreading activation must not be able to half-apply: either the review and
+    every reinforced neighbour land together, or neither does. Both writes are
+    scoped to user_id, so a neighbour id that is not the caller's simply matches
+    no row. Returns True if the reviewed chunk exists and belongs to the user.
+    """
     conn = _connect()
-    cursor = conn.execute(
-        """UPDATE chunks
-           SET fsrs_state = ?,
-               fsrs_step = ?,
-               fsrs_stability = ?,
-               fsrs_difficulty = ?,
-               fsrs_due = ?,
-               fsrs_last_review = ?,
-               last_accessed = ?,
-               access_count = access_count + 1
-           WHERE id = ? AND user_id = ?""",
-        (
-            fsrs["fsrs_state"],
-            fsrs["fsrs_step"],
-            fsrs["fsrs_stability"],
-            fsrs["fsrs_difficulty"],
-            fsrs["fsrs_due"],
-            fsrs["fsrs_last_review"],
-            datetime.now(timezone.utc).isoformat(),
-            chunk_id,
-            user_id,
-        ),
-    )
-    updated = cursor.rowcount > 0
-    if updated:
-        conn.execute(
-            "INSERT INTO access_log (chunk_id, user_id, accessed_at, source) VALUES (?, ?, ?, ?)",
-            (chunk_id, user_id, datetime.now(timezone.utc).isoformat(), "review"),
+    try:
+        cursor = conn.execute(
+            """UPDATE chunks
+                  SET fsrs_state = ?,
+                      fsrs_step = ?,
+                      fsrs_stability = ?,
+                      fsrs_difficulty = ?,
+                      fsrs_due = ?,
+                      fsrs_last_review = ?,
+                      last_accessed = ?,
+                      access_count = access_count + 1
+                WHERE id = ? AND user_id = ?""",
+            (
+                fsrs["fsrs_state"],
+                fsrs["fsrs_step"],
+                fsrs["fsrs_stability"],
+                fsrs["fsrs_difficulty"],
+                fsrs["fsrs_due"],
+                fsrs["fsrs_last_review"],
+                datetime.now(timezone.utc).isoformat(),
+                chunk_id,
+                user_id,
+            ),
         )
-    conn.commit()
-    conn.close()
-    return updated
+        if cursor.rowcount == 0:
+            conn.rollback()
+            return False
+
+        for neighbor_id, new_stability in (neighbor_stabilities or {}).items():
+            conn.execute(
+                "UPDATE chunks SET fsrs_stability = ? WHERE id = ? AND user_id = ?",
+                (float(new_stability), neighbor_id, user_id),
+            )
+
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def apply_fsrs_update(chunk_id: str, user_id: str, fsrs: dict) -> bool:
+    """Persist the FSRS state returned by the scheduler, with no propagation.
+    Returns True if the chunk exists and belongs to the user."""
+    return apply_fsrs_update_with_propagation(chunk_id, user_id, fsrs, None)
 
 
 def update_chunk_access(chunk_id: str, user_id: str, source: str = "manual") -> Optional[sqlite3.Row]:

@@ -142,6 +142,8 @@ class GradeResponse(BaseModel):
     stability: Optional[float]
     difficulty: Optional[float]
     state: int
+    # Knowledge-graph neighbours that gained stability from this review.
+    reinforced_neighbor_count: int = 0
 
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
