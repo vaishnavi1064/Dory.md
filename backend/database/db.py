@@ -577,6 +577,11 @@ def delete_user_data(user_id: str) -> bool:
         conn.execute("DELETE FROM access_log WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM quiz_sessions WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM refresh_tokens WHERE user_id = ?", (user_id,))
+        # Edges reference two chunks each; drop them before the chunks they link.
+        try:
+            conn.execute("DELETE FROM chunk_edges WHERE user_id = ?", (user_id,))
+        except sqlite3.OperationalError:
+            pass
         conn.execute("DELETE FROM chunks WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM meetings WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
@@ -810,6 +815,132 @@ def count_meetings(user_id: str) -> int:
     ).fetchone()[0]
     conn.close()
     return int(n)
+
+
+# ---------------------------------------------------------------------------
+# Knowledge graph (chunk_edges)
+# ---------------------------------------------------------------------------
+
+def canonical_pair(chunk_a: str, chunk_b: str) -> tuple[str, str]:
+    """Order two chunk ids so the smaller is always source_id, matching the
+    CHECK (source_id < target_id) invariant. Ids are TEXT uuids, so this is a
+    lexicographic comparison."""
+    return (chunk_a, chunk_b) if chunk_a < chunk_b else (chunk_b, chunk_a)
+
+
+def _owns_both(conn: sqlite3.Connection, user_id: str, source_id: str, target_id: str) -> bool:
+    """True only if BOTH chunks exist and belong to user_id. The foreign keys
+    guarantee the chunks exist but say nothing about ownership, so without this
+    check an edge could be forged between two users' chunks."""
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM chunks WHERE id IN (?, ?) AND user_id = ?",
+        (source_id, target_id, user_id),
+    ).fetchone()
+    return row["n"] == 2
+
+
+def upsert_edge(
+    user_id: str,
+    chunk_a: str,
+    chunk_b: str,
+    weight: float,
+    edge_type: str = "semantic",
+) -> bool:
+    """Insert an undirected edge, or update its weight if it already exists.
+
+    Returns True if a row was written. Returns False - without raising - for a
+    self-edge, or when either chunk is missing or owned by someone else. The
+    unique constraint plus this upsert is what makes rebuild idempotent.
+    """
+    if chunk_a == chunk_b:
+        return False
+
+    source_id, target_id = canonical_pair(chunk_a, chunk_b)
+    conn = _connect()
+    try:
+        if not _owns_both(conn, user_id, source_id, target_id):
+            return False
+        conn.execute(
+            """INSERT INTO chunk_edges (user_id, source_id, target_id, weight, edge_type)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(user_id, source_id, target_id)
+               DO UPDATE SET weight = excluded.weight, edge_type = excluded.edge_type""",
+            (user_id, source_id, target_id, float(weight), edge_type),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def get_chunk_neighbors(chunk_id: str, user_id: str) -> list[sqlite3.Row]:
+    """Every chunk linked to chunk_id, regardless of which column it sits in.
+
+    Each row carries neighbor_id, weight, edge_type and edge_id plus the
+    neighbor's fsrs_stability (needed by spreading activation) and the retention
+    inputs the graph API reports. Scoped to user_id on both the edge and the
+    joined chunk.
+    """
+    conn = _connect()
+    rows = conn.execute(
+        """SELECT e.id               AS edge_id,
+                  e.weight           AS weight,
+                  e.edge_type        AS edge_type,
+                  c.id               AS neighbor_id,
+                  c.content          AS content,
+                  c.source_file      AS source_file,
+                  c.fsrs_stability   AS fsrs_stability,
+                  c.last_accessed    AS last_accessed,
+                  c.access_count     AS access_count,
+                  c.complexity_score AS complexity_score
+             FROM chunk_edges e
+             JOIN chunks c
+               ON c.id = CASE WHEN e.source_id = ? THEN e.target_id ELSE e.source_id END
+            WHERE e.user_id = ?
+              AND c.user_id = ?
+              AND (e.source_id = ? OR e.target_id = ?)
+            ORDER BY e.weight DESC""",
+        (chunk_id, user_id, user_id, chunk_id, chunk_id),
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def get_edges_for_user(user_id: str, limit: Optional[int] = None) -> list[sqlite3.Row]:
+    """All of a user's edges, strongest first. Bounded by `limit` when given."""
+    conn = _connect()
+    sql = """SELECT id, source_id, target_id, weight, edge_type
+               FROM chunk_edges
+              WHERE user_id = ?
+              ORDER BY weight DESC, id"""
+    params: tuple = (user_id,)
+    if limit is not None:
+        sql += " LIMIT ?"
+        params = (user_id, limit)
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return rows
+
+
+def count_edges(user_id: str) -> int:
+    conn = _connect()
+    n = conn.execute(
+        "SELECT COUNT(*) AS n FROM chunk_edges WHERE user_id = ?", (user_id,)
+    ).fetchone()["n"]
+    conn.close()
+    return n
+
+
+def delete_edge(edge_id: int, user_id: str) -> bool:
+    """Delete one edge. Returns False if it does not exist or is not the user's."""
+    conn = _connect()
+    cursor = conn.execute(
+        "DELETE FROM chunk_edges WHERE id = ? AND user_id = ?", (edge_id, user_id)
+    )
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    conn.close()
+    return deleted
 
 
 # ---------------------------------------------------------------------------

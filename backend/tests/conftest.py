@@ -25,6 +25,11 @@ os.environ["DORY_SKIP_WARMUP"] = "1"
 # No JWT fallback exists anymore (DORY_JWT_SECRET is required in every env), so the
 # test suite must provide one before `main` is imported.
 os.environ["DORY_JWT_SECRET"] = "test-only-secret-not-for-production"
+# Point the vector store at a throwaway directory. The Chroma client is a
+# module-level singleton built on first use, so this must be set before the
+# app is imported — otherwise a test that reaches Chroma would read and write
+# the developer's real backend/data/chroma store.
+os.environ["DORY_CHROMA_PATH"] = tempfile.mkdtemp(prefix="dory_test_chroma_")
 
 from fastapi.testclient import TestClient  # noqa: E402
 

@@ -8,6 +8,7 @@ from intelligence.domain import chunk_text as _chunk_text, complexity_score
 from intelligence.embeddings import embed_texts
 from intelligence.ranking import display_complexity_k, display_stability
 from intelligence.retrieval import add_chunks
+from core.graph_edges import generate_edges_safely
 from database.db import delete_chunk, insert_chunk
 from models.schemas import IngestResponse, TextIngestRequest, TextIngestResponse
 from parsers.file_parser import parse
@@ -124,8 +125,11 @@ async def ingest_files(
                 },
             )
 
-        for cid, chunk_text in zip(chunk_ids, chunks):
+        # Both run after the response: classification needs the LLM, and edge
+        # generation needs every chunk of this file already in Chroma (above).
+        for cid, chunk_text, embedding in zip(chunk_ids, chunks, embeddings):
             background_tasks.add_task(classify_and_store, cid, chunk_text)
+            background_tasks.add_task(generate_edges_safely, user_id, cid, embedding)
 
         ingested_chunk_ids.extend(chunk_ids)
         ingested_file_count += 1
@@ -202,8 +206,9 @@ async def ingest_text(
             },
         )
 
-    for cid, chunk_text in zip(chunk_ids, chunks):
+    for cid, chunk_text, embedding in zip(chunk_ids, chunks, embeddings):
         background_tasks.add_task(classify_and_store, cid, chunk_text)
+        background_tasks.add_task(generate_edges_safely, user_id, cid, embedding)
 
     first_score = scores[0] if scores else 0.5
     S = display_stability(0)

@@ -92,6 +92,27 @@ def query_similar(
     return {"ids": ids, "similarities": similarities, "metadatas": metadatas}
 
 
+def get_embeddings(chunk_ids: list[str], user_id: str) -> dict[str, list[float]]:
+    """Return {chunk_id: embedding} for the given ids, filtered to their owner.
+
+    Ids that do not exist, or that belong to another user, are simply absent from
+    the result — the `where` clause is the same per-user guard used by
+    query_similar(). Used for knowledge-graph edge generation, which needs a
+    chunk's stored vector without re-embedding its text.
+    """
+    if not chunk_ids:
+        return {}
+    res = get_collection().get(
+        ids=chunk_ids,
+        where={"user_id": user_id},
+        include=["embeddings"],
+    )
+    embeddings = res.get("embeddings")
+    if embeddings is None:
+        return {}
+    return {cid: list(emb) for cid, emb in zip(res["ids"], embeddings)}
+
+
 def delete_chunk(chunk_id: str, user_id: str) -> None:
     """Delete only if the embedding's metadata user_id matches. Silent no-op otherwise."""
     get_collection().delete(ids=[chunk_id], where={"user_id": user_id})

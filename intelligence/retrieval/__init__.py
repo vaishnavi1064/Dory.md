@@ -7,6 +7,7 @@ from intelligence.retrieval.vector_store import (
     delete_chunk,
     delete_user,
     get_collection,
+    get_embeddings,
     query_similar,
     upsert_chunk,
 )
@@ -15,6 +16,7 @@ __all__ = [
     "add_chunks",
     "upsert_chunk",
     "query_similar",
+    "get_embeddings",
     "delete_chunk",
     "delete_user",
     "count",
