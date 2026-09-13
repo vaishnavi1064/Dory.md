@@ -13,6 +13,7 @@ import { MeetingsPage } from '@/pages/MeetingsPage';
 import { NoteEditorPage } from '@/pages/NoteEditorPage';
 import { PomodoroPage } from '@/pages/PomodoroPage';
 import { MoodDashboard } from '@/pages/MoodDashboard';
+import { GraphPage } from '@/pages/GraphPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -81,6 +82,7 @@ function AnimatedRoutes() {
                     <Route path="/notes"    element={<NoteEditorPage />} />
                     <Route path="/pomodoro" element={<PomodoroPage />} />
                     <Route path="/mood" element={<MoodDashboard />} />
+                    <Route path="/graph"    element={<GraphPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="*" element={
                       <div className="app-card p-10 text-center">

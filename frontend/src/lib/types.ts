@@ -154,4 +154,6 @@ export interface GradeResponse {
   stability: number | null;
   difficulty: number | null;
   state: number;
+  /** Graph neighbours that gained stability from this review. */
+  reinforced_neighbor_count: number;
 }

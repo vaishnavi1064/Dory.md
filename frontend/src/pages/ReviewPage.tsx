@@ -49,7 +49,7 @@ export function ReviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [totalDue, setTotalDue] = useState(0);
   const [direction, setDirection] = useState<1 | -1>(1); // for slide animation
-  const [lastFeedback, setLastFeedback] = useState<{ grade: Grade; nextDue: string } | null>(null);
+  const [lastFeedback, setLastFeedback] = useState<{ grade: Grade; nextDue: string; reinforced: number } | null>(null);
   const [moodChunkId, setMoodChunkId] = useState<string | null>(null);
 
   // Load queue once on mount.
@@ -85,7 +85,7 @@ export function ReviewPage() {
         good:  s.good  + (grade === 3 ? 1 : 0),
         easy:  s.easy  + (grade === 4 ? 1 : 0),
       }));
-      setLastFeedback({ grade, nextDue: result.next_due });
+      setLastFeedback({ grade, nextDue: result.next_due, reinforced: result.reinforced_neighbor_count });
       if (tryShowMoodPrompt()) setMoodChunkId(current.chunk_id);
       setDirection(1);
       setPosition(p => p + 1);
@@ -258,7 +258,12 @@ export function ReviewPage() {
             className="mb-3 flex items-center justify-center gap-2 rounded-lg border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-2 text-xs font-medium text-[var(--text-2)]"
           >
             <Sparkles size={13} className="text-[var(--accent)]" />
-            <span><span className="font-bold text-[var(--text-1)]">{GRADES[lastFeedback.grade - 1].label}</span>. Next review in <span className="font-bold text-[var(--text-1)]">{timeUntil(lastFeedback.nextDue)}</span>.</span>
+            <span>
+              <span className="font-bold text-[var(--text-1)]">{GRADES[lastFeedback.grade - 1].label}</span>. Next review in <span className="font-bold text-[var(--text-1)]">{timeUntil(lastFeedback.nextDue)}</span>.
+              {lastFeedback.reinforced > 0 && (
+                <> This also strengthened <span className="font-bold text-[var(--text-1)]">{lastFeedback.reinforced}</span> related note{lastFeedback.reinforced === 1 ? '' : 's'}.</>
+              )}
+            </span>
           </motion.div>
         )}
       </AnimatePresence>

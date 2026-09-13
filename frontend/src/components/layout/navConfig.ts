@@ -1,5 +1,5 @@
 import {
-  Activity, Search, BrainCircuit, BookOpen,
+  Activity, Search, BrainCircuit, BookOpen, Network,
   CalendarDays, CalendarClock, Timer, Heart,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -26,6 +26,7 @@ export const navGroups: NavGroup[] = [
       { to: '/search',   label: 'Discover', icon: Search },
       { to: '/library',  label: 'Library',  icon: BookOpen },
       { to: '/review',   label: 'Practice', icon: BrainCircuit },
+      { to: '/graph',    label: 'Graph',    icon: Network },
     ],
   },
   {
