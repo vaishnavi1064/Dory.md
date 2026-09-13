@@ -12,7 +12,7 @@ out of sync with chunk_edges.
 Config knobs (read per call so tests and deploys can override without a
 restart), named as in BUILD.md section 1:
 
-  SEMANTIC_EDGE_THRESHOLD   0.6   minimum cosine similarity for an edge
+  SEMANTIC_EDGE_THRESHOLD   0.45  minimum cosine similarity for an edge
   MAX_EDGES_PER_CHUNK       8     cap on neighbors linked per chunk
   SPREAD_ALPHA              0.3   damping on propagated reinforcement (phase 2)
 """
@@ -25,7 +25,7 @@ from intelligence.retrieval import count as chroma_count, get_embeddings, query_
 
 logger = logging.getLogger("dory.graph")
 
-DEFAULT_EDGE_THRESHOLD = 0.6
+DEFAULT_EDGE_THRESHOLD = 0.45
 DEFAULT_MAX_EDGES = 8
 DEFAULT_SPREAD_ALPHA = 0.3
 
