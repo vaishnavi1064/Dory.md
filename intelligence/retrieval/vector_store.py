@@ -118,6 +118,17 @@ def delete_chunk(chunk_id: str, user_id: str) -> None:
     get_collection().delete(ids=[chunk_id], where={"user_id": user_id})
 
 
+def delete_chunks(chunk_ids: list[str], user_id: str) -> None:
+    """Delete many embeddings in one call, scoped to their owner.
+
+    Same per-user guard as delete_chunk(); ids belonging to another user simply
+    match nothing. Used when re-seeding clears a previous demo corpus.
+    """
+    if not chunk_ids:
+        return
+    get_collection().delete(ids=chunk_ids, where={"user_id": user_id})
+
+
 def delete_user(user_id: str) -> None:
     """Delete ALL of a user's embeddings from the shared collection in one call,
     matched by the user_id metadata. Used for account deletion (GDPR erasure)."""

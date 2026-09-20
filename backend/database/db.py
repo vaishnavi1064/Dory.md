@@ -501,6 +501,67 @@ def count_chunks(user_id: str = DEFAULT_USER_ID) -> int:
     return count
 
 
+def get_chunk_ids_by_source_prefix(user_id: str, prefix: str) -> list[str]:
+    """Ids of a user's chunks whose source_file starts with `prefix`."""
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT id FROM chunks WHERE user_id = ? AND source_file LIKE ? || '%'",
+        (user_id, prefix),
+    ).fetchall()
+    conn.close()
+    return [row["id"] for row in rows]
+
+
+def delete_chunks_by_source_prefix(user_id: str, prefix: str) -> list[str]:
+    """Delete a user's chunks whose source_file starts with `prefix`.
+
+    Returns the ids removed so the caller can clear the same rows from the
+    vector store. Scoped to user_id and to the prefix, so re-seeding the demo
+    corpus can never reach another account or a hand-written note. Graph edges
+    referencing these chunks go with them via ON DELETE CASCADE.
+    """
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id FROM chunks WHERE user_id = ? AND source_file LIKE ? || '%'",
+            (user_id, prefix),
+        ).fetchall()
+        ids = [row["id"] for row in rows]
+        if ids:
+            placeholders = ",".join("?" for _ in ids)
+            conn.execute(
+                f"DELETE FROM chunks WHERE user_id = ? AND id IN ({placeholders})",
+                (user_id, *ids),
+            )
+            conn.commit()
+        return ids
+    finally:
+        conn.close()
+
+
+def set_retention_anchors(user_id: str, anchors: dict) -> None:
+    """Set retention_anchor for many of a user's chunks in one transaction.
+
+    Separate from last_accessed on purpose: the anchor is what the forgetting
+    curve decays from, while last_accessed stays the honest "last viewed" time.
+    """
+    if not anchors:
+        return
+    conn = _connect()
+    try:
+        for chunk_id, anchor_iso in anchors.items():
+            conn.execute(
+                "UPDATE chunks SET retention_anchor = ? WHERE id = ? AND user_id = ?",
+                (anchor_iso, chunk_id, user_id),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 # ---------------------------------------------------------------------------
 # Quiz session helpers
 # ---------------------------------------------------------------------------

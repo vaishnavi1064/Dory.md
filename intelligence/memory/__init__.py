@@ -8,6 +8,7 @@ from intelligence.memory.ebbinghaus import (
     calculate_retention_batch,
     classify_retention,
     complexity_modifier,
+    hours_until_retention,
     stability,
 )
 from intelligence.memory.scheduler import VALID_GRADES, grade
@@ -24,6 +25,7 @@ __all__ = [
     "classify_retention",
     "stability",
     "complexity_modifier",
+    "hours_until_retention",
     "STRONG_THRESHOLD",
     "FADING_THRESHOLD",
     "WEAK_THRESHOLD",

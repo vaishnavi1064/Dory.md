@@ -73,7 +73,8 @@ function DemoDataSection() {
         <h2 className="app-section-title">Demo data</h2>
       </div>
       <p className="text-sm text-[var(--text-3)]">
-        Load 55 synthetic chunks across the four retention profiles for testing the dashboard and quizzes.
+        Load 87 synthetic notes spread across the four retention profiles, linked into a knowledge
+        graph. Safe to run again — it replaces the previous demo set rather than adding to it.
       </p>
       {msg && (
         <p className={`mt-3 text-sm font-medium ${status === 'done' ? 'text-[var(--good)]' : 'text-[var(--text-2)]'}`}>

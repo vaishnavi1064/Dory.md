@@ -1,14 +1,28 @@
-"""Seed endpoint — inserts synthetic demo chunks with varied retention profiles + pre-assigned categories."""
+"""Seed endpoint — loads (or reloads) a synthetic demo corpus.
+
+The corpus is placed in its retention bands relative to the current clock, so
+the dashboard shows the same strong/fading/weak/critical spread whenever it is
+loaded rather than decaying into all-critical over time. Reloading clears the
+previous demo corpus from both stores first, so it works on an already-decayed
+database.
+"""
 import random
-import threading
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 
-from database.db import get_all_chunks, insert_chunk, update_chunk_category
+from core.graph_edges import rebuild_edges_for_user
+from database.db import (
+    delete_chunks_by_source_prefix,
+    insert_chunk,
+    set_retention_anchors,
+    update_chunk_category,
+)
 from routers.deps import get_current_user_id
 from intelligence.embeddings import embed_texts
-from intelligence.retrieval import add_chunks
+from intelligence.memory import classify_retention, hours_until_retention
+from intelligence.retrieval import add_chunks, delete_chunks as chroma_delete_chunks
 
 router = APIRouter()
 
@@ -80,53 +94,154 @@ _SEED_ITEMS = [
     ("Emergency fund target: 6 months of expenses ≈ $18000. Current: $11200. Auto-transfer $400/month from checking.", "demo/personal.md", "critical", "Personal"),
     ("Wifi password: change every 6 months. Router admin login is on the back. Mesh network — primary in living room, satellite in bedroom.", "demo/personal.md", "critical", "Personal"),
     ("Driver's license renewal: every 5 years, online if no address change. Last renewed July 2023 — next due 2028.", "demo/personal.md", "critical", "Personal"),
+    # --------- ALGORITHMS, second cluster (strong) ---------
+    ("Two pointers walk a sorted array from both ends, moving whichever side improves the candidate. Turns many O(n^2) pair-search problems into O(n) with O(1) space.", "demo/algorithms.md", "strong", "Computer Science"),
+    ("Sliding window keeps a running aggregate over a contiguous range, expanding right and contracting left. O(n) for longest/shortest subarray problems under a constraint.", "demo/algorithms.md", "strong", "Computer Science"),
+    ("Heaps give O(log n) insert and extract-min with O(1) peek. A binary heap is an array where children of i live at 2i+1 and 2i+2. Backs priority queues and top-k.", "demo/algorithms.md", "strong", "Computer Science"),
+    ("Topological sort orders a DAG so every edge points forward. Kahn algorithm repeatedly removes in-degree-zero nodes; a leftover node means a cycle.", "demo/algorithms.md", "strong", "Computer Science"),
+    ("Union-find tracks disjoint sets with near-constant amortised cost using path compression and union by rank. Used for cycle detection and Kruskal MST.", "demo/algorithms.md", "strong", "Computer Science"),
+    ("Git bisect binary-searches commit history for the change that introduced a bug. Mark good and bad commits and it halves the range each step.", "demo/git.md", "strong", "Computer Science"),
+    ("Git cherry-pick replays a single commit onto the current branch. Useful for hotfixes; it creates a new commit hash, so the original stays where it was.", "demo/git.md", "strong", "Computer Science"),
+    ("Python generators yield lazily and hold one value at a time, so memory stays flat over huge sequences. A generator expression is (expr for x in it).", "demo/python.md", "strong", "Computer Science"),
+    ("React useEffect cleanup runs before the next effect and on unmount. Return a function that cancels timers, aborts fetches, and removes listeners to avoid leaks.", "demo/react.md", "strong", "Computer Science"),
+
+    # --------- AI / ML, second cluster (fading) ---------
+    ("Positional encoding injects token order into a transformer, which is otherwise permutation-invariant. Sinusoidal in the original paper; learned or rotary (RoPE) today.", "demo/ml.md", "fading", "AI/ML"),
+    ("Byte-pair encoding builds a subword vocabulary by repeatedly merging the most frequent adjacent pair. Keeps common words whole and still covers rare ones.", "demo/ml.md", "fading", "AI/ML"),
+    ("Dropout randomly zeroes activations during training, forcing redundant representations. Disabled at inference; scale activations to keep the expected value stable.", "demo/ml.md", "fading", "AI/ML"),
+    ("Learning rate schedules decay the step size over training. Warmup then cosine decay is the transformer default; too aggressive a decay stalls progress early.", "demo/ml.md", "fading", "AI/ML"),
+    ("Beam search keeps the k most likely partial sequences at each decode step instead of only the best. Higher k costs more compute and can hurt diversity.", "demo/ml.md", "fading", "AI/ML"),
+    ("HNSW builds a layered proximity graph for approximate nearest-neighbour search. Upper layers are sparse for long hops, the base layer is dense for refinement.", "demo/ml.md", "fading", "AI/ML"),
+    ("Cosine similarity compares direction and ignores magnitude; Euclidean distance cares about both. Normalise vectors and the two rank results identically.", "demo/ml.md", "fading", "AI/ML"),
+
+    # --------- DATABASES / WEB / SECURITY (weak) ---------
+    ("SQL joins: INNER keeps matching rows, LEFT keeps all of the left side, FULL keeps both. A join without a predicate is a cross product, usually a bug.", "demo/databases.md", "weak", "System Design"),
+    ("Database indexes trade write speed and disk for read speed. A composite index only helps queries that use its leftmost columns in order.", "demo/databases.md", "weak", "System Design"),
+    ("Transaction isolation levels: read uncommitted, read committed, repeatable read, serializable. Each rules out one more anomaly and costs more concurrency.", "demo/databases.md", "weak", "System Design"),
+    ("Sharding splits rows across databases by a shard key. Pick a key with even distribution and few cross-shard queries, because joins across shards are painful.", "demo/databases.md", "weak", "System Design"),
+    ("Replication lag is the delay before a read replica sees a write. Read-after-write consistency needs sticky reads to the primary or a version token.", "demo/databases.md", "weak", "System Design"),
+    ("Connection pooling reuses a fixed set of database connections. Pool size should track database capacity, not application threads, or the DB becomes the bottleneck.", "demo/databases.md", "weak", "System Design"),
+    ("HTTP status codes: 2xx success, 3xx redirect, 4xx client error, 5xx server error. 401 means unauthenticated, 403 means authenticated but not allowed.", "demo/web.md", "weak", "System Design"),
+    ("CORS is a browser rule, not a server one. The server sends Access-Control-Allow-Origin; preflight OPTIONS is sent for non-simple methods and headers.", "demo/web.md", "weak", "System Design"),
+    ("JWTs are stateless and cannot be revoked before expiry, so keep access tokens short and pair them with a refresh token you can revoke server-side.", "demo/security.md", "weak", "System Design"),
+    ("OAuth2 authorization code flow: redirect to the provider, receive a code, exchange it server-side for tokens. PKCE protects public clients from code interception.", "demo/security.md", "weak", "System Design"),
+    ("Never store passwords reversibly. bcrypt or argon2 with a per-password salt and a deliberate work factor; raise the cost as hardware gets faster.", "demo/security.md", "weak", "System Design"),
+
+    # --------- PERSONAL, second cluster (critical) ---------
+    ("Car service every 7500 miles or 6 months. Last done at 41200. Tyre rotation included; brake pads were at 60% at the last check.", "demo/personal.md", "critical", "Personal"),
+    ("Renters insurance renews in November, 14 dollars a month, covers 30k contents and 100k liability. Policy number is in the filing box.", "demo/personal.md", "critical", "Personal"),
+    ("Tax documents to keep for seven years: W-2s, 1099s, charitable receipts, brokerage statements. Scan and file each January.", "demo/personal.md", "critical", "Personal"),
+    ("Bolognese: soffritto low and slow for 20 minutes, brown the mince hard, deglaze with white wine, then milk, then tomato. Simmer three hours minimum.", "demo/personal.md", "critical", "Personal"),
+    ("Airline miles expire after 24 months of no activity. A single small purchase through the shopping portal resets the clock on the whole balance.", "demo/personal.md", "critical", "Personal"),
 ]
 
-# Profile → (min_days, max_days, min_access, max_access) for backdated last_accessed.
-_PROFILES = {
-    "strong":   (1,   4,   4, 8),
-    "fading":   (14,  25,  2, 3),
-    "weak":     (45,  70,  1, 2),
-    "critical": (100, 160, 0, 1),
+DEMO_SOURCE_PREFIX = "demo/"
+
+# Retention band each profile must land in. The bucket thresholds are
+# STRONG >= 0.8, FADING >= 0.5, WEAK >= 0.2 (intelligence/memory/ebbinghaus.py),
+# so every band sits comfortably inside its bucket rather than on a boundary.
+_TARGET_RETENTION = {
+    "strong":   (0.84, 0.94),
+    "fading":   (0.56, 0.74),
+    "weak":     (0.26, 0.44),
+    "critical": (0.04, 0.16),
 }
+
+# Plausible "last viewed" window per profile, in days. This feeds last_accessed
+# only, which stays an honest record of when the note was read — the retention
+# anchor is what actually places a chunk in its bucket. These ranges track the
+# bands above so the two never contradict each other on screen.
+_LAST_SEEN_DAYS = {
+    "strong":   (1, 5),
+    "fading":   (6, 13),
+    "weak":     (14, 26),
+    "critical": (24, 50),
+}
+
+_ACCESS_COUNTS = {
+    "strong":   (4, 8),
+    "fading":   (2, 3),
+    "weak":     (1, 2),
+    "critical": (0, 1),
+}
+
+# Real MiniLM similarities between distinct notes sit well below the product
+# default, so the demo corpus is linked at a lower bar to produce a graph worth
+# looking at. Scoped to this endpoint; SEMANTIC_EDGE_THRESHOLD is unchanged.
+DEMO_EDGE_THRESHOLD = 0.35
+
+# Fixed seed so reloading the demo yields the same corpus every time.
+_RNG_SEED = 1064
 
 
 @router.post("/seed")
 def seed_demo_data(user_id: str = Depends(get_current_user_id)):
-    existing = get_all_chunks(user_id)
-    already = sum(1 for r in existing if (r["source_file"] or "").startswith("demo/"))
-    if already >= 10:
-        return {"message": f"Demo data already loaded ({already} demo chunks present).", "seeded": 0}
+    """Load or reload the demo corpus for the calling user.
 
+    Idempotent by replacement rather than by refusal: any previous demo chunks
+    are deleted from SQLite (their graph edges cascade) and from the vector
+    store, then the corpus is rebuilt and relinked. Only rows whose source_file
+    starts with 'demo/' are touched, and every query is scoped to user_id, so a
+    reload can never reach a hand-written note or another account.
+    """
+    rng = random.Random(_RNG_SEED)
     now = datetime.now(tz=timezone.utc)
+
+    removed_ids = delete_chunks_by_source_prefix(user_id, DEMO_SOURCE_PREFIX)
+    if removed_ids:
+        chroma_delete_chunks(removed_ids, user_id)
+
     texts = [item[0] for item in _SEED_ITEMS]
     embeddings = embed_texts(texts)
 
-    chunk_ids, metadatas = [], []
-    for (content, source, profile_key, category), embedding in zip(_SEED_ITEMS, embeddings):
-        min_d, max_d, min_a, max_a = _PROFILES[profile_key]
-        days = random.randint(min_d, max_d)
-        last_accessed = now - timedelta(days=days)
-        created_at = last_accessed - timedelta(days=random.randint(1, 7))
-        access_count = random.randint(min_a, max_a)
+    chunk_ids: list[str] = []
+    metadatas: list[dict] = []
+    anchors: dict[str, str] = {}
+    buckets: Counter = Counter()
+
+    for (content, source, profile, category), embedding in zip(_SEED_ITEMS, embeddings):
+        complexity = round(rng.uniform(0.4, 0.8), 2)
+        access_count = rng.randint(*_ACCESS_COUNTS[profile])
+
+        last_accessed = now - timedelta(days=rng.uniform(*_LAST_SEEN_DAYS[profile]))
+        created_at = last_accessed - timedelta(days=rng.randint(1, 7))
 
         cid = insert_chunk(
             content=content,
             source_file=source,
-            complexity_score=round(random.uniform(0.4, 0.8), 2),
+            complexity_score=complexity,
             user_id=user_id,
             created_at=created_at,
             last_accessed=last_accessed,
             access_count=access_count,
         )
-        # Pre-assign category — skip the LLM classifier entirely so it works without a Groq key.
+        # Pre-assign the category — no LLM call, so this works without a key.
         update_chunk_category(cid, category)
+
+        # Solve for the anchor that puts this chunk at its target retention now.
+        target_retention = rng.uniform(*_TARGET_RETENTION[profile])
+        decay_hours = hours_until_retention(target_retention, access_count, complexity)
+        anchors[cid] = (now - timedelta(hours=decay_hours)).isoformat()
+        buckets[classify_retention(target_retention)] += 1
+
         chunk_ids.append(cid)
         metadatas.append({"user_id": user_id, "chunk_id": cid, "source_file": source})
 
     add_chunks(chunk_ids, embeddings, metadatas)
+    set_retention_anchors(user_id, anchors)
+
+    graph = rebuild_edges_for_user(user_id, threshold=DEMO_EDGE_THRESHOLD)
 
     return {
-        "message": f"Seeded {len(chunk_ids)} demo chunks across strong/fading/weak/critical profiles and 5 categories.",
         "seeded": len(chunk_ids),
+        "removed": len(removed_ids),
+        "edges_total": graph["edges_total"],
+        "edges_created": graph["edges_created"],
+        "buckets": dict(buckets),
+        "message": (
+            f"Loaded {len(chunk_ids)} demo notes "
+            f"({buckets['strong']} strong / {buckets['fading']} fading / "
+            f"{buckets['weak']} weak / {buckets['critical']} critical) "
+            f"linked by {graph['edges_total']} connections."
+        ),
     }

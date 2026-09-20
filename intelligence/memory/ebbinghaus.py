@@ -76,6 +76,34 @@ def calculate_retention_batch(
     return np.exp(-t / (S * k * _BASE_HOURS))
 
 
+# Smallest retention the inverse will solve for: ln(0) is undefined, so a
+# request for "zero retention" is treated as this instead of infinity.
+_MIN_SOLVABLE_RETENTION = 1e-6
+
+
+def hours_until_retention(
+    target_retention: float,
+    access_count: int,
+    complexity_score: float,
+) -> float:
+    """Hours of decay that land a chunk at `target_retention`.
+
+    The analytic inverse of calculate_retention():
+
+        R(t) = e^(-t / (S*k*BASE))   =>   t = -S*k*BASE * ln(R)
+
+    Lets a caller place a chunk in a chosen retention band from the current
+    clock rather than from a hardcoded date, so a seeded corpus shows the same
+    spread whenever it is built. Returns 0.0 for a target of 1.0 or above.
+    """
+    r = min(1.0, max(_MIN_SOLVABLE_RETENTION, target_retention))
+    if r >= 1.0:
+        return 0.0
+    S = stability(access_count)
+    k = complexity_modifier(complexity_score)
+    return float(-S * k * _BASE_HOURS * math.log(r))
+
+
 # Retention status thresholds — the single source of truth shared by backend
 # responses AND the frontend (mirror these in the SPA, see UI_REVIEW D-1).
 STRONG_THRESHOLD = 0.8

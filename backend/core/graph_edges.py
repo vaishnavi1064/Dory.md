@@ -30,6 +30,10 @@ DEFAULT_MAX_EDGES = 8
 DEFAULT_SPREAD_ALPHA = 0.3
 
 
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
 def _env_float(name: str, default: float, lo: float, hi: float) -> float:
     try:
         return max(lo, min(hi, float(os.getenv(name, str(default)))))
@@ -59,12 +63,14 @@ def generate_edges_for_chunk(
     user_id: str,
     chunk_id: str,
     embedding: list[float] | None = None,
+    threshold: float | None = None,
 ) -> int:
     """Link one chunk to its nearest same-user neighbors above the threshold.
 
     Pass `embedding` when the caller already has it (the ingest path does) to
-    skip a Chroma round-trip; otherwise it is fetched by id. Returns the number
-    of edges written, counting weight updates to existing edges.
+    skip a Chroma round-trip; otherwise it is fetched by id. Pass `threshold` to
+    override SEMANTIC_EDGE_THRESHOLD for one call. Returns the number of edges
+    written, counting weight updates to existing edges.
     """
     k = max_edges_per_chunk()
     if k <= 0 or chroma_count() == 0:
@@ -78,20 +84,20 @@ def generate_edges_for_chunk(
 
     # Ask for one extra: the chunk itself is its own nearest neighbor.
     results = query_similar(embedding, user_id, n_results=k + 1)
-    threshold = semantic_edge_threshold()
+    tau = semantic_edge_threshold() if threshold is None else _clamp01(threshold)
 
     written = 0
     for neighbor_id, similarity in zip(results["ids"], results["similarities"]):
         if written >= k:
             break
-        if neighbor_id == chunk_id or similarity < threshold:
+        if neighbor_id == chunk_id or similarity < tau:
             continue
         if upsert_edge(user_id, chunk_id, neighbor_id, weight=float(similarity)):
             written += 1
     return written
 
 
-def rebuild_edges_for_user(user_id: str) -> dict:
+def rebuild_edges_for_user(user_id: str, threshold: float | None = None) -> dict:
     """Regenerate edges across all of a user's chunks.
 
     Idempotent: the unique constraint plus the upsert means a second run
@@ -105,7 +111,9 @@ def rebuild_edges_for_user(user_id: str) -> dict:
     embeddings = get_embeddings(chunk_ids, user_id)
 
     for chunk_id in chunk_ids:
-        generate_edges_for_chunk(user_id, chunk_id, embedding=embeddings.get(chunk_id))
+        generate_edges_for_chunk(
+            user_id, chunk_id, embedding=embeddings.get(chunk_id), threshold=threshold
+        )
 
     total = count_edges(user_id)
     return {"edges_created": total - before, "edges_total": total}

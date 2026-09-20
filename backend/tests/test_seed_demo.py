@@ -1,0 +1,227 @@
+"""Demo corpus loader — date-independent spread, re-seedable, scoped.
+
+The seeder used to backdate last_accessed by a fixed number of days, so a corpus
+built months ago decayed into all-critical and the loader then refused to
+refresh it. These tests pin the two properties that fixes: the spread is
+computed from the current clock, and reloading replaces rather than refuses.
+"""
+
+import math
+from collections import Counter
+
+import pytest
+
+from database.db import (
+    count_chunks,
+    get_all_chunks,
+    get_chunk_ids_by_source_prefix,
+    insert_chunk,
+)
+from intelligence.memory import calculate_retention, classify_retention
+from routers._shared import retention_anchor
+
+from tests.test_graph_edges import _user_id_from
+
+BUCKETS = ("strong", "fading", "weak", "critical")
+DIM = 384
+
+
+@pytest.fixture(autouse=True)
+def fake_embeddings(monkeypatch):
+    """Stub the embedder: CI installs no torch, and real vectors would make the
+    edge assertions depend on MiniLM's behaviour.
+
+    Each demo source file gets its own orthogonal dimension pair, so notes from
+    the same file are near-identical and notes from different files are exactly
+    unrelated. That gives deterministic, file-shaped clusters to link.
+    """
+    import routers.seed as seed_router
+
+    sources = [source for _, source, _, _ in seed_router._SEED_ITEMS]
+    cluster_of = {name: i for i, name in enumerate(dict.fromkeys(sources))}
+    source_by_text = {text: source for text, source, _, _ in seed_router._SEED_ITEMS}
+    seen: Counter = Counter()
+
+    def embed(texts):
+        out = []
+        for text in texts:
+            source = source_by_text[text]
+            base = cluster_of[source] * 2
+            # Spread members of a cluster along a small arc so edge weights vary
+            # but stay far above the demo threshold.
+            angle = seen[source] * 0.05
+            seen[source] += 1
+            v = [0.0] * DIM
+            v[base] = math.cos(angle)
+            v[base + 1] = math.sin(angle)
+            out.append(v)
+        return out
+
+    monkeypatch.setattr(seed_router, "embed_texts", embed)
+
+
+def auth(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def seed(client, token):
+    return client.post("/api/seed", headers=auth(token))
+
+
+def live_buckets(user_id: str) -> Counter:
+    """Classify the user's demo chunks the way every read path does."""
+    counts: Counter = Counter()
+    for row in get_all_chunks(user_id):
+        if not (row["source_file"] or "").startswith("demo/"):
+            continue
+        r = calculate_retention(
+            retention_anchor(row), row["access_count"], row["complexity_score"]
+        )
+        counts[classify_retention(r)] += 1
+    return counts
+
+
+# -- Spread -------------------------------------------------------------------
+
+def test_seed_lands_every_bucket_from_the_current_clock(client, register_user):
+    _, token = register_user()
+    uid = _user_id_from(token)
+
+    res = seed(client, token)
+    assert res.status_code == 200, res.text
+    body = res.json()
+
+    assert body["seeded"] > 50
+    counts = live_buckets(uid)
+    # Every bucket populated — the old seeder collapsed to critical over time.
+    for bucket in BUCKETS:
+        assert counts[bucket] > 0, f"no chunks in {bucket}: {dict(counts)}"
+
+    total = sum(counts.values())
+    assert counts["strong"] / total > 0.2
+    assert counts["critical"] / total < 0.3
+
+
+def test_reported_buckets_match_what_the_read_paths_compute(client, register_user):
+    _, token = register_user()
+    uid = _user_id_from(token)
+
+    reported = Counter(seed(client, token).json()["buckets"])
+
+    assert reported == live_buckets(uid)
+
+
+def test_retention_anchor_is_the_tuning_knob_not_last_accessed(client, register_user):
+    """last_accessed stays an honest 'last viewed'; the anchor places the bucket."""
+    _, token = register_user()
+    uid = _user_id_from(token)
+    seed(client, token)
+
+    differing = 0
+    for row in get_all_chunks(uid):
+        assert row["retention_anchor"] is not None
+        if row["retention_anchor"] != row["last_accessed"]:
+            differing += 1
+    assert differing > 0, "the anchor should be solved for, not copied from last_accessed"
+
+
+def test_graph_api_shows_every_bucket_after_seeding(client, register_user):
+    _, token = register_user()
+    seed(client, token)
+
+    body = client.get("/api/graph?limit=300", headers=auth(token)).json()
+    seen = {n["bucket"] for n in body["nodes"]}
+
+    assert seen == set(BUCKETS)
+
+
+# -- Re-seedable --------------------------------------------------------------
+
+def test_reseeding_replaces_rather_than_refusing(client, register_user):
+    _, token = register_user()
+    uid = _user_id_from(token)
+
+    first = seed(client, token).json()
+    assert first["removed"] == 0
+    after_first = count_chunks(uid)
+
+    second = seed(client, token).json()
+
+    assert second["seeded"] == first["seeded"], "a reload must rebuild the corpus"
+    assert second["removed"] == first["seeded"], "and clear the previous one first"
+    assert count_chunks(uid) == after_first, "no duplicate accumulation"
+
+
+def test_reseeding_refreshes_a_decayed_corpus(client, register_user):
+    """The case the old loader could not handle: stale demo data already present."""
+    _, token = register_user()
+    uid = _user_id_from(token)
+    seed(client, token)
+
+    # Force the whole corpus to look ancient, as months of real decay would.
+    from database.db import set_retention_anchors
+    stale = {cid: "2025-01-01T00:00:00+00:00" for cid in get_chunk_ids_by_source_prefix(uid, "demo/")}
+    set_retention_anchors(uid, stale)
+    assert set(live_buckets(uid)) == {"critical"}
+
+    seed(client, token)
+
+    counts = live_buckets(uid)
+    for bucket in BUCKETS:
+        assert counts[bucket] > 0, f"reload failed to restore {bucket}: {dict(counts)}"
+
+
+def test_reseeding_never_touches_non_demo_notes(client, register_user):
+    _, token = register_user()
+    uid = _user_id_from(token)
+    mine = insert_chunk(
+        content="a note I wrote myself",
+        source_file="my_notes.md",
+        complexity_score=0.5,
+        user_id=uid,
+    )
+
+    seed(client, token)
+    seed(client, token)
+
+    kept = [r for r in get_all_chunks(uid) if r["id"] == mine]
+    assert len(kept) == 1
+    assert kept[0]["content"] == "a note I wrote myself"
+
+
+# -- Connectivity -------------------------------------------------------------
+
+def test_seed_produces_a_connected_graph(client, register_user):
+    _, token = register_user()
+    body = seed(client, token).json()
+
+    assert body["edges_total"] > 0
+
+    graph = client.get("/api/graph?limit=300", headers=auth(token)).json()
+    linked = {n["id"] for n in graph["nodes"] if n["degree"] > 0}
+    # A scatter of isolated points is not a constellation.
+    assert len(linked) >= 0.25 * len(graph["nodes"]), (
+        f"only {len(linked)}/{len(graph['nodes'])} nodes have a link"
+    )
+
+
+# -- Per-user isolation -------------------------------------------------------
+
+def test_seeding_is_scoped_to_the_caller(client, register_user):
+    _, token_a = register_user("a")
+    _, token_b = register_user("b")
+    uid_a, uid_b = _user_id_from(token_a), _user_id_from(token_b)
+
+    seed(client, token_a)
+    seed(client, token_b)
+    before_a = count_chunks(uid_a)
+
+    # B reloading must not remove or duplicate anything of A's.
+    seed(client, token_b)
+
+    assert count_chunks(uid_a) == before_a
+    assert len(get_chunk_ids_by_source_prefix(uid_a, "demo/")) == before_a
+
+
+def test_seed_requires_auth(client):
+    assert client.post("/api/seed").status_code == 401
