@@ -16,6 +16,24 @@ import {
 
 const BUCKETS: Bucket[] = ['strong', 'fading', 'weak', 'critical'];
 
+/** Soft lavender glow behind the graph so the canvas area is not stark white.
+ *
+ *  This sits on the wrapping div, not on the canvas: ForceGraph2D paints its
+ *  background through canvas, which cannot parse var() or color-mix() (hence
+ *  resolveColor below), while a plain element reads the theme tokens directly.
+ *  The gradient fades to the same hue at zero alpha rather than to
+ *  `transparent`, which would wash through grey on the way out, and lands on
+ *  --surface so the edges match the surrounding card. Alphas are deliberately
+ *  low so the bucket colours — especially the red "critical" nodes — stay
+ *  legible on top of it. */
+const GRAPH_BACKDROP = [
+  'radial-gradient(ellipse 75% 65% at 50% 45%,',
+  'oklch(var(--lavender) / 0.13) 0%,',
+  'oklch(var(--lavender) / 0.06) 40%,',
+  'oklch(var(--lavender) / 0) 72%),',
+  'var(--surface)',
+].join(' ');
+
 /** Canvas cannot read `var(--token)` or `color-mix()`, so resolve each value to
  *  a concrete color by letting the browser compute it on a throwaway element. */
 function resolveColor(value: string, fallback: string): string {
@@ -203,7 +221,11 @@ export function GraphPage() {
       )}
 
       <div className="flex min-h-0 flex-1 gap-3">
-        <div ref={wrapRef} className="app-card relative min-h-[420px] flex-1 overflow-hidden p-0">
+        <div
+          ref={wrapRef}
+          className="app-card relative min-h-[420px] flex-1 overflow-hidden p-0"
+          style={{ background: GRAPH_BACKDROP }}
+        >
           {loading && (
             <div className="absolute inset-0 grid place-items-center text-sm text-[var(--text-3)]">
               Loading your graph...
@@ -241,7 +263,7 @@ export function GraphPage() {
               graphData={graphData}
               width={size.width}
               height={size.height}
-              backgroundColor="transparent"
+              backgroundColor="rgba(0,0,0,0)"
               nodeId="id"
               nodeRelSize={4}
               nodeVal={(node: SimNode) => 1 + node.degree}
