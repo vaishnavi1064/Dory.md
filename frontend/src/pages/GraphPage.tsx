@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import ForceGraph2D from 'react-force-graph-2d';
+import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d';
 import { Network, RefreshCw, X } from 'lucide-react';
 import {
-  BUCKET_COLORS,
   BUCKET_LABELS,
   fetchGraph,
   fetchNeighbors,
@@ -15,44 +14,109 @@ import {
 } from '@/lib/graph';
 
 const BUCKETS: Bucket[] = ['strong', 'fading', 'weak', 'critical'];
+const TAU = Math.PI * 2;
 
-/** Soft lavender glow behind the graph so the canvas area is not stark white.
+/** Deep-space field the constellation sits on.
  *
- *  This sits on the wrapping div, not on the canvas: ForceGraph2D paints its
- *  background through canvas, which cannot parse var() or color-mix() (hence
- *  resolveColor below), while a plain element reads the theme tokens directly.
- *  The gradient fades to the same hue at zero alpha rather than to
- *  `transparent`, which would wash through grey on the way out, and lands on
- *  --surface so the edges match the surrounding card. Alphas are deliberately
- *  low so the bucket colours — especially the red "critical" nodes — stay
- *  legible on top of it. */
-const GRAPH_BACKDROP = [
-  'radial-gradient(ellipse 75% 65% at 50% 45%,',
-  'oklch(var(--lavender) / 0.13) 0%,',
-  'oklch(var(--lavender) / 0.06) 40%,',
-  'oklch(var(--lavender) / 0) 72%),',
-  'var(--surface)',
-].join(' ');
+ *  Literal colours throughout: the canvas cannot parse var() or oklch(), and
+ *  the app's light warm+lavender tokens have no dark counterpart to borrow.
+ *  Painted by CSS on the wrapping div, which keeps the card's rounded border
+ *  and overflow clipping; the canvas layer above it stays fully transparent. */
+const GRAPH_BACKDROP =
+  'radial-gradient(ellipse 85% 75% at 50% 40%, #16203a 0%, #0d1326 45%, #070912 100%)';
 
-/** Canvas cannot read `var(--token)` or `color-mix()`, so resolve each value to
- *  a concrete color by letting the browser compute it on a throwaway element. */
-function resolveColor(value: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback;
-  const probe = document.createElement('span');
-  probe.style.color = fallback;
-  probe.style.color = value;
-  probe.style.display = 'none';
-  document.body.appendChild(probe);
-  const resolved = getComputedStyle(probe).color;
-  probe.remove();
-  return resolved || fallback;
-}
+/** Bucket colours, brightened for a dark field.
+ *
+ *  Same four meanings and the same hues as the light-theme badges (--good,
+ *  --warn, the danger/warn mix, --danger) but at much higher lightness and
+ *  chroma, so they read as coloured light rather than muddy paint on black.
+ *  Kept as RGB triples so alpha variants compose without a colour parser. */
+type Rgb = readonly [number, number, number];
 
-type SimNode = GraphNode & { x?: number; y?: number };
+const LUMINOUS: Record<Bucket, Rgb> = {
+  strong: [86, 247, 178],
+  fading: [255, 206, 92],
+  weak: [255, 140, 84],
+  critical: [255, 96, 118],
+};
+
+/** Cool light for the web between nodes. */
+const LINK_RGB: Rgb = [150, 176, 255];
+const LINK_ALPHA_FLOOR = 0.3;
+const LINK_ALPHA_RANGE = 0.45;
+
+const rgba = (c: Rgb, a: number) => `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a})`;
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+type SimNode = GraphNode & { x?: number; y?: number; vx?: number; vy?: number };
 type SimLink = Omit<GraphEdge, 'source' | 'target'> & {
   source: string | SimNode;
   target: string | SimNode;
 };
+
+/** Core radius of a node's bright centre — bigger for better-connected notes. */
+const coreRadius = (node: SimNode) => 2.2 + Math.min(node.degree, 8) * 0.55;
+
+// ── Continuous drift ─────────────────────────────────────────────────────────
+// d3 scales its own forces by alpha, so once the layout cools they stop acting
+// and the graph freezes. This force ignores alpha and keeps nodes breathing:
+// each one is nudged along a slow, phase-offset circle while a weak spring pulls
+// it back toward an anchor that itself trails the node. The trailing anchor is
+// what stops the drift accumulating into escape, so no restoring force from the
+// cooled simulation is needed.
+
+const DRIFT_FORCE = 0.03;
+const DRIFT_SPRING = 0.0016;
+const ANCHOR_FOLLOW = 0.0015;
+
+interface ForceLike {
+  (alpha: number): void;
+  initialize?: (nodes: SimNode[]) => void;
+}
+
+function createDriftForce(): ForceLike {
+  let nodes: SimNode[] = [];
+  const anchors = new Map<string, { x: number; y: number }>();
+  let tick = 0;
+
+  const force: ForceLike = () => {
+    tick += 1;
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (n.x == null || n.y == null) continue;
+
+      let anchor = anchors.get(n.id);
+      if (!anchor) {
+        anchor = { x: n.x, y: n.y };
+        anchors.set(n.id, anchor);
+      }
+      anchor.x += (n.x - anchor.x) * ANCHOR_FOLLOW;
+      anchor.y += (n.y - anchor.y) * ANCHOR_FOLLOW;
+
+      const phase = i * 1.7;
+      n.vx = (n.vx ?? 0) + Math.cos(tick * 0.006 + phase) * DRIFT_FORCE
+        - (n.x - anchor.x) * DRIFT_SPRING;
+      n.vy = (n.vy ?? 0) + Math.sin(tick * 0.0047 + phase) * DRIFT_FORCE
+        - (n.y - anchor.y) * DRIFT_SPRING;
+    }
+  };
+
+  force.initialize = (ns) => {
+    nodes = ns;
+    anchors.clear();
+  };
+  return force;
+}
+
+// The typings model every force as a bare (alpha) => void, so reaching the real
+// d3 force objects to configure them needs a cast.
+interface ChargeForce {
+  strength(v: number): ChargeForce;
+  distanceMax(v: number): ChargeForce;
+}
+interface LinkForce {
+  distance(fn: (link: SimLink) => number): LinkForce;
+}
 
 export function GraphPage() {
   const [nodes, setNodes] = useState<GraphNode[]>([]);
@@ -67,19 +131,8 @@ export function GraphPage() {
   const [neighbors, setNeighbors] = useState<GraphNeighbor[] | null>(null);
 
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const fgRef = useRef<ForceGraphMethods<SimNode, SimLink> | undefined>(undefined);
   const [size, setSize] = useState({ width: 0, height: 0 });
-
-  // Resolve the theme tokens once; canvas needs literal color strings.
-  const palette = useMemo(
-    () => ({
-      strong: resolveColor(BUCKET_COLORS.strong, '#3f9e6a'),
-      fading: resolveColor(BUCKET_COLORS.fading, '#c98a2b'),
-      weak: resolveColor(BUCKET_COLORS.weak, '#cf5f3a'),
-      critical: resolveColor(BUCKET_COLORS.critical, '#d3453b'),
-      link: resolveColor('var(--border-strong)', '#c9c4bb'),
-    }),
-    [],
-  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,6 +179,30 @@ export function GraphPage() {
     [nodes, edges],
   );
 
+  const isEmpty = !loading && nodes.length === 0;
+  const hasNoEdges = !loading && nodes.length > 0 && edges.length === 0;
+  const graphReady = !loading && !isEmpty && size.width > 0;
+
+  // Tune the forces, reheat, and frame the result whenever the data changes.
+  useEffect(() => {
+    if (!graphReady) return;
+    const fg = fgRef.current;
+    if (!fg) return;
+
+    const charge = fg.d3Force('charge') as unknown as ChargeForce | undefined;
+    charge?.strength(-165).distanceMax(700);
+
+    const link = fg.d3Force('link') as unknown as LinkForce | undefined;
+    // Stronger links sit closer together, so clusters read as clusters.
+    link?.distance((l) => 42 + (1 - clamp01(l.weight)) * 130);
+
+    fg.d3Force('drift', createDriftForce() as never);
+    fg.d3ReheatSimulation();
+
+    const t = setTimeout(() => fgRef.current?.zoomToFit(700, 55), 700);
+    return () => clearTimeout(t);
+  }, [graphReady, graphData]);
+
   const onNodeClick = useCallback(async (node: SimNode) => {
     setSelected(node);
     setNeighbors(null);
@@ -153,9 +230,6 @@ export function GraphPage() {
       setRebuilding(false);
     }
   }
-
-  const isEmpty = !loading && nodes.length === 0;
-  const hasNoEdges = !loading && nodes.length > 0 && edges.length === 0;
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -227,7 +301,7 @@ export function GraphPage() {
           style={{ background: GRAPH_BACKDROP }}
         >
           {loading && (
-            <div className="absolute inset-0 grid place-items-center text-sm text-[var(--text-3)]">
+            <div className="absolute inset-0 grid place-items-center text-sm text-[#9aa3c4]">
               Loading your graph...
             </div>
           )}
@@ -235,8 +309,8 @@ export function GraphPage() {
           {isEmpty && (
             <div className="absolute inset-0 grid place-items-center px-6 text-center">
               <div>
-                <p className="font-bold text-[var(--text-1)]">No connections yet</p>
-                <p className="mx-auto mt-1 max-w-sm text-sm text-[var(--text-3)]">
+                <p className="font-bold text-[#eef1fb]">No connections yet</p>
+                <p className="mx-auto mt-1 max-w-sm text-sm text-[#9aa3c4]">
                   Review or add notes to build your graph. If you already have notes, rebuild to
                   link them.
                 </p>
@@ -253,34 +327,82 @@ export function GraphPage() {
           )}
 
           {hasNoEdges && (
-            <p className="absolute inset-x-0 top-0 z-10 bg-[var(--accent-soft)] px-3 py-2 text-center text-xs text-[var(--text-2)]">
+            <p className="absolute inset-x-0 top-0 z-10 border-b border-[rgba(150,176,255,0.18)] bg-[rgba(13,19,38,0.88)] px-3 py-2 text-center text-xs text-[#c3cbe6]">
               These notes have no links yet — rebuild to connect them.
             </p>
           )}
 
-          {!loading && !isEmpty && size.width > 0 && (
+          {graphReady && (
             <ForceGraph2D
+              ref={fgRef}
               graphData={graphData}
               width={size.width}
               height={size.height}
               backgroundColor="rgba(0,0,0,0)"
               nodeId="id"
               nodeRelSize={4}
-              nodeVal={(node: SimNode) => 1 + node.degree}
-              nodeColor={(node: SimNode) => palette[node.bucket]}
               nodeLabel={(node: SimNode) =>
                 `${node.label} — ${BUCKET_LABELS[node.bucket]} (${Math.round(node.retention * 100)}%)`
               }
+              nodeCanvasObjectMode={() => 'replace'}
+              nodeCanvasObject={(node: SimNode, ctx: CanvasRenderingContext2D) => {
+                if (node.x == null || node.y == null) return;
+                const tint = LUMINOUS[node.bucket];
+                const core = coreRadius(node);
+                const halo = core * 5.5;
+
+                // Soft halo, so the node reads as a light source rather than a dot.
+                const glow = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, halo);
+                glow.addColorStop(0, rgba(tint, 0.4));
+                glow.addColorStop(0.4, rgba(tint, 0.12));
+                glow.addColorStop(1, rgba(tint, 0));
+                ctx.fillStyle = glow;
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, halo, 0, TAU);
+                ctx.fill();
+
+                ctx.save();
+                ctx.shadowColor = rgba(tint, 0.95);
+                ctx.shadowBlur = 14;
+                ctx.fillStyle = rgba(tint, 1);
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, core, 0, TAU);
+                ctx.fill();
+                ctx.restore();
+
+                // White-hot centre keeps the hue readable at small sizes.
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, core * 0.36, 0, TAU);
+                ctx.fill();
+              }}
+              nodePointerAreaPaint={(
+                node: SimNode,
+                color: string,
+                ctx: CanvasRenderingContext2D,
+              ) => {
+                if (node.x == null || node.y == null) return;
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, coreRadius(node) + 4, 0, TAU);
+                ctx.fill();
+              }}
+              linkCanvasObjectMode={() => 'replace'}
               linkCanvasObject={(link: SimLink, ctx: CanvasRenderingContext2D) => {
                 const s = link.source as SimNode;
                 const t = link.target as SimNode;
                 if (typeof s !== 'object' || typeof t !== 'object') return;
                 if (s.x == null || s.y == null || t.x == null || t.y == null) return;
+
+                const w = clamp01(link.weight);
                 ctx.save();
-                // Opacity tracks edge weight, so stronger links read as stronger.
-                ctx.globalAlpha = 0.15 + 0.65 * Math.max(0, Math.min(1, link.weight));
-                ctx.strokeStyle = palette.link;
-                ctx.lineWidth = 0.5 + 1.5 * Math.max(0, Math.min(1, link.weight));
+                // Additive blending so crossing threads brighten where they meet.
+                ctx.globalCompositeOperation = 'lighter';
+                // Floored alpha keeps the weakest links part of the web.
+                ctx.strokeStyle = rgba(LINK_RGB, LINK_ALPHA_FLOOR + LINK_ALPHA_RANGE * w);
+                ctx.lineWidth = 0.5 + 0.6 * w;
+                ctx.shadowColor = rgba(LINK_RGB, 0.7);
+                ctx.shadowBlur = 5;
                 ctx.beginPath();
                 ctx.moveTo(s.x, s.y);
                 ctx.lineTo(t.x, t.y);
@@ -288,7 +410,12 @@ export function GraphPage() {
                 ctx.restore();
               }}
               onNodeClick={onNodeClick}
-              cooldownTicks={120}
+              d3AlphaDecay={0.014}
+              d3VelocityDecay={0.32}
+              // The drift force ignores alpha, so the engine must keep ticking
+              // after the layout has cooled for the graph to stay alive.
+              cooldownTicks={Infinity}
+              cooldownTime={Infinity}
             />
           )}
         </div>
