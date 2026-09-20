@@ -48,9 +48,6 @@ def _migrate(conn: sqlite3.Connection) -> None:
             "UPDATE chunks SET fsrs_due = COALESCE(last_accessed, created_at, ?) WHERE fsrs_due IS NULL",
             (datetime.now(timezone.utc).isoformat(),),
         )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_chunks_fsrs_due ON chunks(user_id, fsrs_due)"
-        )
 
     # Retention anchor: the timestamp the forgetting curve decays from. Kept
     # separate from last_accessed so spreading activation can partially refresh
@@ -63,7 +60,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
         )
 
     # Indexed here rather than in schema.sql: executescript() runs before this
-    # function, so on an existing database the column does not exist yet.
+    # function, so on a database predating either column, an index in schema.sql
+    # would reference a column that does not exist yet and abort startup.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chunks_fsrs_due ON chunks(user_id, fsrs_due)"
+    )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_chunks_retention_anchor "
         "ON chunks(user_id, retention_anchor, access_count)"
