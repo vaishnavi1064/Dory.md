@@ -6,6 +6,11 @@
   /* Radius scale base — the only radius source of truth. */
   --radius: 0.5rem;
 
+  /* Light is the default token set; `.dark` further down overrides the same
+     names. Every color in the app resolves through these, so the theme flips
+     by swapping values here — never by adding a parallel dark palette. */
+  color-scheme: light;
+
   /* ── Superhuman semantic tokens (oklch channels). These are consumed by the
         Tailwind @theme-style color registrations in tailwind.config.js, which
         wrap them as `oklch(var(--token) / <alpha-value>)` so utilities like
@@ -27,7 +32,11 @@
   /* Special tokens */
   --cream: 0.93 0.015 75;
   --lavender: 0.82 0.10 290;
+  /* --hero is a deliberately dark panel in BOTH themes (login hero, code
+     blocks), so it is intentionally NOT overridden in .dark. */
   --hero: 0.15 0.04 280;
+  /* Pink half of the mesh-bg blob pair. */
+  --mesh-pink: 0.85 0.09 350;
 
   /* ── Legacy application variables, kept as full colors and retuned to the
         Superhuman palette. The existing component vocabulary references these
@@ -55,7 +64,101 @@
   --good: oklch(0.60 0.13 150);
   --info: oklch(0.55 0.12 260);
   --violet: oklch(0.58 0.18 290);
+  /* Retention "weak" band — the fourth status color beside good/warn/danger. */
+  --weak: oklch(0.65 0.17 45);
+  /* Category hues that no existing semantic token covers. The rest of the
+     taxonomy in src/styles/theme.ts reuses --info/--violet/--warn/--good. */
+  --cat-cyan: oklch(0.60 0.08 190);
+  --cat-pink: oklch(0.62 0.15 350);
+  --cat-teal: oklch(0.55 0.08 185);
+  --cat-neutral: oklch(0.60 0.01 70);
   --shadow: 0 18px 50px oklch(0.20 0.06 280 / 0.10);
+
+  /* Type that sits on a solid --accent / --danger fill. Separate tokens because
+     in dark mode those fills become luminous and need dark type instead. */
+  --on-accent: oklch(1 0 0);
+  --on-danger: oklch(1 0 0);
+  /* Type on the permanently dark --hero panel. Pinned light in both themes. */
+  --hero-foreground: 0.97 0.005 280;
+  /* Backdrop behind modals and the mobile nav drawer. */
+  --scrim: oklch(0 0 0 / 0.35);
+  /* Hairline lift along a card's top edge. */
+  --card-highlight: oklch(1 0 0 / 0.75);
+
+  /* ── Constellation graph. /graph keeps its deep-space field in BOTH themes,
+        so these are pinned and deliberately NOT overridden in .dark. They cover
+        the DOM layer only; the canvas keeps its own literals in GraphPage.tsx
+        because a 2D context cannot parse var(). ── */
+  --graph-backdrop:
+    radial-gradient(ellipse 85% 75% at 50% 40%, #16203a 0%, #0d1326 45%, #070912 100%);
+  --graph-border: oklch(0.45 0.05 275);
+  --graph-text: #eef1fb;
+  --graph-text-dim: #9aa3c4;
+  --graph-text-muted: #c3cbe6;
+  --graph-notice-bg: rgba(13, 19, 38, 0.88);
+  --graph-notice-border: rgba(150, 176, 255, 0.18);
+}
+
+/* ── Dark token set ──────────────────────────────────────────────────────────
+   Same token names, dark values. Applied by a `.dark` class on <html>, set
+   before first paint by the inline script in index.html and thereafter by
+   src/lib/themeMode.ts. Accent lightness is inverted (deep indigo → luminous
+   lavender) and the status colors are lifted so they stay legible on a dark
+   field; --hero and the --graph-* tokens are intentionally absent because
+   those surfaces are dark in both themes. */
+.dark {
+  color-scheme: dark;
+
+  --background: 0.17 0.012 285;
+  --foreground: 0.94 0.006 285;
+  --primary: 0.78 0.11 290;
+  --primary-foreground: 0.18 0.03 285;
+  --secondary: 0.255 0.016 285;
+  --secondary-foreground: 0.94 0.006 285;
+  --muted: 0.255 0.016 285;
+  --muted-foreground: 0.72 0.012 285;
+  --accent-foreground: 0.18 0.03 285;
+  --destructive: 0.70 0.19 25;
+  --destructive-foreground: 0.18 0.02 25;
+  --input: 0.32 0.016 285;
+  --ring: 0.70 0.10 290;
+
+  --cream: 0.255 0.016 285;
+  --lavender: 0.80 0.10 290;
+  --mesh-pink: 0.72 0.10 350;
+
+  --bg: oklch(0.17 0.012 285);
+  --bg-soft: oklch(0.20 0.014 285);
+  --surface: oklch(0.215 0.014 285);
+  --surface-2: oklch(0.255 0.016 285);
+  --surface-3: oklch(0.31 0.018 285);
+  --border: oklch(0.32 0.016 285);
+  --border-strong: oklch(0.42 0.020 285);
+  --text-1: oklch(0.95 0.006 285);
+  --text-2: oklch(0.84 0.010 285);
+  --text-3: oklch(0.72 0.012 285);
+  --text-4: oklch(0.60 0.014 285);
+  /* Inverted: the CTA is luminous lavender on dark, with dark type on top. */
+  --accent: oklch(0.78 0.11 290);
+  --accent-hover: oklch(0.85 0.10 290);
+  --accent-soft: oklch(0.29 0.045 290);
+  --accent-border: oklch(0.52 0.085 290);
+  --warn: oklch(0.80 0.15 75);
+  --danger: oklch(0.70 0.19 25);
+  --good: oklch(0.76 0.15 155);
+  --info: oklch(0.72 0.12 260);
+  --violet: oklch(0.74 0.15 292);
+  --weak: oklch(0.76 0.16 50);
+  --cat-cyan: oklch(0.78 0.09 190);
+  --cat-pink: oklch(0.78 0.13 350);
+  --cat-teal: oklch(0.75 0.09 185);
+  --cat-neutral: oklch(0.74 0.012 285);
+  --shadow: 0 18px 50px oklch(0 0 0 / 0.55);
+
+  --on-accent: oklch(0.17 0.03 285);
+  --on-danger: oklch(0.17 0.02 25);
+  --scrim: oklch(0 0 0 / 0.60);
+  --card-highlight: oklch(1 0 0 / 0.05);
 }
 
 @layer base {
@@ -128,7 +231,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
-    box-shadow: 0 1px 0 oklch(1 0 0 / 0.75);
+    box-shadow: 0 1px 0 var(--card-highlight);
     transition: border-color 160ms ease, box-shadow 160ms ease;
   }
 
@@ -189,7 +292,7 @@
     border: 1px solid oklch(var(--primary) / 0.2);
     border-radius: 8px;
     background: var(--accent);
-    color: white;
+    color: var(--on-accent);
     font-size: 0.84rem;
     font-weight: 700;
     line-height: 1;
@@ -224,7 +327,7 @@
     border: 1px solid oklch(var(--destructive) / 0.25);
     border-radius: 8px;
     background: var(--danger);
-    color: white;
+    color: var(--on-danger);
     font-size: 0.84rem;
     font-weight: 700;
     line-height: 1;
@@ -295,6 +398,20 @@
     background: oklch(var(--foreground) / 0.05);
     border-color: oklch(var(--foreground) / 0.08);
     color: var(--text-1);
+  }
+
+  .btn-primary:focus-visible,
+  .corp-btn-primary:focus-visible,
+  .btn-danger:focus-visible,
+  .btn-secondary:focus-visible,
+  .corp-btn-secondary:focus-visible,
+  .btn:focus-visible,
+  .btn-ghost:focus-visible,
+  .corp-btn-ghost:focus-visible,
+  .nav-item:focus-visible,
+  .nav-item-active:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px oklch(var(--ring) / 0.45);
   }
 
   .corp-input,
@@ -382,14 +499,14 @@
 
   .badge-strong {
     color: var(--good);
-    background: oklch(var(--good) / 0.12);
-    border: 1px solid oklch(var(--good) / 0.22);
+    background: color-mix(in oklab, var(--good) 12%, transparent);
+    border: 1px solid color-mix(in oklab, var(--good) 22%, transparent);
   }
 
   .badge-fading {
     color: var(--warn);
-    background: oklch(var(--warn) / 0.13);
-    border: 1px solid oklch(var(--warn) / 0.25);
+    background: color-mix(in oklab, var(--warn) 13%, transparent);
+    border: 1px solid color-mix(in oklab, var(--warn) 25%, transparent);
   }
 
   .badge-weak,
@@ -403,6 +520,33 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
+  }
+
+  /* The /graph constellation keeps its deep-space field in BOTH themes, so the
+     UI painted on top of it needs dark values even while the app is light.
+     Re-pointing the tokens on the container is what makes that work: the empty
+     state, the notice bar and the rebuild button all inherit correct colors
+     with no per-element overrides, and new UI added inside is correct by
+     default. Declared after .app-card so it wins the background/border at equal
+     specificity. Canvas colors stay literal in GraphPage.tsx — a 2D context
+     cannot parse var(). */
+  .graph-field {
+    background: var(--graph-backdrop);
+    border-color: var(--graph-border);
+    --text-1: var(--graph-text);
+    --text-2: var(--graph-text-muted);
+    --text-3: var(--graph-text-dim);
+    --text-4: var(--graph-text-dim);
+    --border: var(--graph-notice-border);
+    --surface: var(--graph-notice-bg);
+    --surface-2: var(--graph-notice-bg);
+    --accent: oklch(0.78 0.11 290);
+    --accent-hover: oklch(0.85 0.10 290);
+    --accent-border: oklch(0.52 0.085 290);
+    --on-accent: oklch(0.17 0.03 285);
+    /* .app-card's light-theme highlight would draw a white hairline across the
+       top of the dark field. */
+    --card-highlight: oklch(1 0 0 / 0.05);
   }
 }
 
@@ -520,7 +664,7 @@ mark {
   border-radius: 8px;
   border: 1px solid var(--border);
   background: oklch(var(--hero));
-  color: oklch(var(--background));
+  color: oklch(var(--hero-foreground));
   padding: 1rem;
 }
 
@@ -528,7 +672,7 @@ mark {
   margin: 1rem 0;
   padding: 0.55rem 0.85rem;
   border-left: 3px solid var(--warn);
-  background: oklch(var(--warn) / 0.1);
+  background: color-mix(in oklab, var(--warn) 10%, transparent);
   color: var(--text-2);
 }
 
@@ -687,9 +831,9 @@ input[type='number'].timer-number-input {
     background-color: oklch(var(--background));
     background-image:
       radial-gradient(at 18% 22%, oklch(var(--lavender) / 0.12) 0px, transparent 50%),
-      radial-gradient(at 82% 14%, oklch(0.85 0.09 350 / 0.1) 0px, transparent 50%),
+      radial-gradient(at 82% 14%, oklch(var(--mesh-pink) / 0.1) 0px, transparent 50%),
       radial-gradient(at 72% 82%, oklch(var(--lavender) / 0.08) 0px, transparent 55%),
-      radial-gradient(at 28% 86%, oklch(0.85 0.09 350 / 0.06) 0px, transparent 50%);
+      radial-gradient(at 28% 86%, oklch(var(--mesh-pink) / 0.06) 0px, transparent 50%);
   }
 
   /* Subtle dotted texture; set a text color on the element to tint the dots. */

@@ -426,7 +426,7 @@ export function NoteDetailPanel({ chunk, folders = [], onDelete, onContentUpdate
       </div>
 
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-4">
           <div className="app-card w-full max-w-sm p-5 shadow-[var(--shadow)]">
             <h3 className="font-bold text-[var(--text-1)]">Delete this chunk?</h3>
             <p className="mt-2 text-sm text-[var(--text-3)]">This permanently removes the chunk from the knowledge base.</p>
@@ -439,7 +439,7 @@ export function NoteDetailPanel({ chunk, folders = [], onDelete, onContentUpdate
       )}
 
       {encryptModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-4">
           <div className="app-card w-full max-w-sm p-5 shadow-[var(--shadow)]">
             <div className="mb-3 flex items-center gap-2">
               <Lock size={16} className="text-[var(--warn)]" />

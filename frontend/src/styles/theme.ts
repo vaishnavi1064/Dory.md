@@ -6,20 +6,26 @@ export const STRONG_THRESHOLD = 0.8;
 export const FADING_THRESHOLD = 0.5;
 export const WEAK_THRESHOLD = 0.2;
 
-// Retention/data-viz colors are expressed in oklch and mirror the semantic
-// tokens in styles.css: strong=good, fading=warn, weak=orange, critical=destructive.
+// Retention/data-viz colors resolve through the semantic tokens in styles.css
+// rather than repeating their oklch values, so they lift with the dark token
+// set instead of staying at light-theme lightness. var() is valid everywhere
+// these land: inline styles, SVG fill/stroke, and recharts props.
 export function retentionToColor(retention: number): string {
-  if (retention >= STRONG_THRESHOLD) return 'oklch(0.60 0.13 150)';
-  if (retention >= FADING_THRESHOLD) return 'oklch(0.70 0.15 70)';
-  if (retention >= WEAK_THRESHOLD) return 'oklch(0.65 0.17 45)';
-  return 'oklch(0.577 0.245 27)';
+  if (retention >= STRONG_THRESHOLD) return 'var(--good)';
+  if (retention >= FADING_THRESHOLD) return 'var(--warn)';
+  if (retention >= WEAK_THRESHOLD) return 'var(--weak)';
+  return 'var(--danger)';
 }
 
 export function retentionToGlow(retention: number): string {
-  if (retention >= STRONG_THRESHOLD) return 'oklch(0.60 0.13 150 / 0.2)';
-  if (retention >= FADING_THRESHOLD) return 'oklch(0.70 0.15 70 / 0.2)';
-  if (retention >= WEAK_THRESHOLD) return 'oklch(0.65 0.17 45 / 0.2)';
-  return 'oklch(0.577 0.245 27 / 0.2)';
+  return `color-mix(in oklab, ${retentionToColor(retention)} 20%, transparent)`;
+}
+
+/** Translucent fill/border derived from a solid token — `${color}44` string
+ *  concatenation does not work on a var() (or on oklch()), so callers that want
+ *  a tint of a category/retention color go through this. */
+export function tint(color: string, percent: number): string {
+  return `color-mix(in oklab, ${color} ${percent}%, transparent)`;
 }
 
 export function retentionToLabel(retention: number): string {
@@ -31,19 +37,21 @@ export function retentionToLabel(retention: number): string {
 
 // Keys are lowercased category names. Covers the backend taxonomy
 // (intelligence/llm/categorization.py CATEGORIES) plus legacy frontend labels.
-// `general` is the fallback used when a category isn't listed.
+// `general` is the fallback used when a category isn't listed. Each entry reuses
+// an existing semantic token where the hue already matches; the four --cat-*
+// tokens cover the hues the app had no token for.
 export const categoryColors: Record<string, string> = {
-  'computer science': 'oklch(0.55 0.12 260)',
-  'ai/ml': 'oklch(0.58 0.18 290)',
-  'system design': 'oklch(0.60 0.08 190)',
-  mathematics: 'oklch(0.62 0.15 350)',
-  design: 'oklch(0.70 0.15 70)',
-  productivity: 'oklch(0.60 0.13 150)',
-  research: 'oklch(0.55 0.12 260)',
-  personal: 'oklch(0.55 0.08 185)',
-  other: 'oklch(0.60 0.01 70)',
+  'computer science': 'var(--info)',
+  'ai/ml': 'var(--violet)',
+  'system design': 'var(--cat-cyan)',
+  mathematics: 'var(--cat-pink)',
+  design: 'var(--warn)',
+  productivity: 'var(--good)',
+  research: 'var(--info)',
+  personal: 'var(--cat-teal)',
+  other: 'var(--cat-neutral)',
   // legacy / fallback keys
-  technical: 'oklch(0.55 0.12 260)',
-  reference: 'oklch(0.70 0.15 70)',
-  general: 'oklch(0.58 0.18 290)',
+  technical: 'var(--info)',
+  reference: 'var(--warn)',
+  general: 'var(--violet)',
 };

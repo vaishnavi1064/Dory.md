@@ -36,11 +36,11 @@ function cardTitle(c: { content: string; source_file: string }) {
 
 /** Map FSRS stability (in days) to one of our retention colors. */
 function stabilityColor(stabilityDays: number | null): string {
-  if (stabilityDays == null) return 'oklch(0.577 0.245 27)'; // never reviewed = fragile
-  if (stabilityDays < 1)  return 'oklch(0.577 0.245 27)';    // critical
-  if (stabilityDays < 7)  return 'oklch(0.65 0.17 45)';      // weak
-  if (stabilityDays < 30) return 'oklch(0.70 0.15 70)';      // fading
-  return 'oklch(0.60 0.13 150)';                             // strong
+  if (stabilityDays == null) return 'var(--danger)'; // never reviewed = fragile
+  if (stabilityDays < 1)  return 'var(--danger)';    // critical
+  if (stabilityDays < 7)  return 'var(--weak)';      // weak
+  if (stabilityDays < 30) return 'var(--warn)';      // fading
+  return 'var(--good)';                              // strong
 }
 
 function stabilityLabel(s: number | null): string {
@@ -170,7 +170,7 @@ export function Dashboard() {
               className="shrink-0 rounded-full px-3 py-1 text-xs font-bold transition-all"
               style={{
                 background: active ? 'var(--accent)' : 'var(--surface-2)',
-                color: active ? 'white' : 'var(--text-2)',
+                color: active ? 'var(--on-accent)' : 'var(--text-2)',
                 border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
               }}
             >
@@ -185,7 +185,7 @@ export function Dashboard() {
         {[
           { label: 'Strong',   value: counts.strong,   dot: 'var(--good)',   hint: '≥ 80%' },
           { label: 'Fading',   value: counts.fading,   dot: 'var(--warn)',   hint: '50 – 80%' },
-          { label: 'Weak',     value: counts.weak,     dot: 'oklch(0.65 0.17 45)', hint: '20 – 50%' },
+          { label: 'Weak',     value: counts.weak,     dot: 'var(--weak)', hint: '20 – 50%' },
           { label: 'Critical', value: counts.critical, dot: 'var(--danger)', hint: '< 20%' },
         ].map(({ label, value, dot, hint }, i) => (
           <motion.div

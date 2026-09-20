@@ -4,6 +4,24 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Paint the theme before first paint so dark-mode users never see a white
+      // flash. Mirrors resolveThemeMode() in src/lib/themeMode.ts — an explicit
+      // stored choice wins, otherwise follow the OS. Keep the two in sync.
+      (function () {
+        try {
+          var stored = localStorage.getItem('dory.theme.mode');
+          var dark =
+            stored === 'dark' ||
+            (stored !== 'light' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {
+          // Storage blocked (private mode) — light is the safe default.
+        }
+      })();
+    </script>
     <title>Dory.md — Your AI Memory Assistant</title>
     <meta name="description" content="AI-powered personal knowledge system using the forgetting curve to keep what matters fresh." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

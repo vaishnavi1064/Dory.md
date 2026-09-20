@@ -16,15 +16,6 @@ import {
 const BUCKETS: Bucket[] = ['strong', 'fading', 'weak', 'critical'];
 const TAU = Math.PI * 2;
 
-/** Deep-space field the constellation sits on.
- *
- *  Literal colours throughout: the canvas cannot parse var() or oklch(), and
- *  the app's light warm+lavender tokens have no dark counterpart to borrow.
- *  Painted by CSS on the wrapping div, which keeps the card's rounded border
- *  and overflow clipping; the canvas layer above it stays fully transparent. */
-const GRAPH_BACKDROP =
-  'radial-gradient(ellipse 85% 75% at 50% 40%, #16203a 0%, #0d1326 45%, #070912 100%)';
-
 /** Bucket colours, brightened for a dark field.
  *
  *  Same four meanings and the same hues as the light-theme badges (--good,
@@ -289,7 +280,7 @@ export function GraphPage() {
       </AnimatePresence>
 
       {error && (
-        <p className="rounded-lg border border-[var(--danger)]/30 bg-[var(--danger)]/10 p-3 text-sm text-[var(--danger)]">
+        <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </p>
       )}
@@ -297,11 +288,10 @@ export function GraphPage() {
       <div className="flex min-h-0 flex-1 gap-3">
         <div
           ref={wrapRef}
-          className="app-card relative min-h-[420px] flex-1 overflow-hidden p-0"
-          style={{ background: GRAPH_BACKDROP }}
+          className="app-card graph-field relative min-h-[420px] flex-1 overflow-hidden p-0"
         >
           {loading && (
-            <div className="absolute inset-0 grid place-items-center text-sm text-[#9aa3c4]">
+            <div className="absolute inset-0 grid place-items-center text-sm text-[var(--text-3)]">
               Loading your graph...
             </div>
           )}
@@ -309,8 +299,8 @@ export function GraphPage() {
           {isEmpty && (
             <div className="absolute inset-0 grid place-items-center px-6 text-center">
               <div>
-                <p className="font-bold text-[#eef1fb]">No connections yet</p>
-                <p className="mx-auto mt-1 max-w-sm text-sm text-[#9aa3c4]">
+                <p className="font-bold text-[var(--text-1)]">No connections yet</p>
+                <p className="mx-auto mt-1 max-w-sm text-sm text-[var(--text-3)]">
                   Review or add notes to build your graph. If you already have notes, rebuild to
                   link them.
                 </p>
@@ -327,7 +317,7 @@ export function GraphPage() {
           )}
 
           {hasNoEdges && (
-            <p className="absolute inset-x-0 top-0 z-10 border-b border-[rgba(150,176,255,0.18)] bg-[rgba(13,19,38,0.88)] px-3 py-2 text-center text-xs text-[#c3cbe6]">
+            <p className="absolute inset-x-0 top-0 z-10 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-center text-xs text-[var(--text-2)]">
               These notes have no links yet — rebuild to connect them.
             </p>
           )}

@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
@@ -38,7 +39,12 @@ export default {
         border: 'var(--border)',
         cream: 'oklch(var(--cream) / <alpha-value>)',
         lavender: 'oklch(var(--lavender) / <alpha-value>)',
-        hero: 'oklch(var(--hero) / <alpha-value>)',
+        hero: {
+          DEFAULT: 'oklch(var(--hero) / <alpha-value>)',
+          // Type on the permanently dark hero panel — pinned light in both
+          // themes, unlike `background` which inverts.
+          foreground: 'oklch(var(--hero-foreground) / <alpha-value>)',
+        },
       },
       borderRadius: {
         sm: 'calc(var(--radius) - 4px)',

@@ -66,7 +66,7 @@ export function DeleteAccountModal({ onClose }: DeleteAccountModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-4"
       onKeyDown={onKeyDown}
       role="dialog"
       aria-modal="true"

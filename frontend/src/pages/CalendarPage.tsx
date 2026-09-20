@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { getAllChunks } from '@/lib/api';
 import type { BackendChunk } from '@/lib/types';
 import { ChevronLeft, ChevronRight, CalendarDays, X, BookOpen, AlertTriangle } from 'lucide-react';
-import { retentionToColor } from '@/styles/theme';
+import { retentionToColor, tint } from '@/styles/theme';
 import { formatRetentionPct } from '@/lib/utils';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -38,7 +38,7 @@ function daysUntil(d: Date) {
 
 function urgencyColor(days: number) {
   if (days < 0) return 'var(--danger)';
-  if (days < 2) return 'oklch(0.65 0.17 45)';
+  if (days < 2) return 'var(--weak)';
   if (days < 7) return 'var(--warn)';
   if (days < 30) return 'var(--good)';
   return 'var(--accent)';
@@ -210,7 +210,7 @@ export function CalendarPage() {
       </aside>
 
       {openChunk && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4" onClick={() => setOpenChunk(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-4" onClick={() => setOpenChunk(null)}>
           <div className="app-card w-full max-w-2xl p-5 shadow-[var(--shadow)]" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
@@ -224,7 +224,7 @@ export function CalendarPage() {
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-[var(--text-3)]">
               <span className="tag"><BookOpen size={13} /> {openChunk.access_count} reviews</span>
-              <span className="tag" style={{ color: retentionToColor(openChunk.retention), borderColor: `${retentionToColor(openChunk.retention)}44`, background: `${retentionToColor(openChunk.retention)}14` }}>
+              <span className="tag" style={{ color: retentionToColor(openChunk.retention), borderColor: tint(retentionToColor(openChunk.retention), 27), background: tint(retentionToColor(openChunk.retention), 8) }}>
                 {formatRetentionPct(openChunk.retention)} retained
               </span>
               <span>Predicted critical date: {predictForgetDate(openChunk).toLocaleDateString()}</span>

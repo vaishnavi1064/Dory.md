@@ -9,6 +9,7 @@ import {
   tryShowMoodPrompt,
 } from '@/lib/mood';
 import { UploadModal } from '@/components/upload/UploadModal';
+import { ThemeToggle } from './ThemeToggle';
 import { navGroups } from './navConfig';
 
 interface HeaderProps {
@@ -89,7 +90,7 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
             <Menu size={18} />
           </button>
           <Link to="/" className="flex shrink-0 items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent)] text-[var(--on-accent)]">
               <Brain size={18} />
             </span>
             <span className="hidden font-bold text-[var(--text-1)] sm:inline">Dory.md</span>
@@ -109,6 +110,7 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
             <Plus size={15} />
             <span>Add memory</span>
           </button>
+          <ThemeToggle />
           {askMoodEnabled && (
             <button
               type="button"
@@ -143,11 +145,11 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
           aria-label="Navigation"
           onClick={(e) => { if (e.target === e.currentTarget) setMobileNavOpen(false); }}
         >
-          <div className="absolute inset-0 bg-black/35" />
+          <div className="absolute inset-0 bg-[var(--scrim)]" />
           <nav className="absolute left-0 top-0 h-full w-72 max-w-[80vw] overflow-y-auto border-r border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow)]">
             <div className="mb-4 flex items-center justify-between">
               <span className="flex items-center gap-2 font-bold text-[var(--text-1)]">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] text-[var(--on-accent)]">
                   <Brain size={16} />
                 </span>
                 Dory.md
@@ -189,7 +191,7 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
 
       {showIngest && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowIngest(false);
           }}
@@ -240,7 +242,7 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
 
       {manualMoodOpen && askMoodEnabled && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/35 p-4 pt-20"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-[var(--scrim)] p-4 pt-20"
           onClick={(e) => { if (e.target === e.currentTarget) setManualMoodOpen(false); }}
         >
           <div className="app-card w-full max-w-lg p-4 shadow-[var(--shadow)]">

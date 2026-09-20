@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { getAllChunks, bulkDeleteChunks, getFolders, moveChunkToFolder } from '@/lib/api';
 import { NoteDetailPanel, type PanelChunk } from '@/components/notes/NoteDetailPanel';
 import type { BackendChunk, Category } from '@/lib/types';
-import { categoryColors, retentionToColor, retentionToLabel } from '@/styles/theme';
+import { categoryColors, retentionToColor, retentionToLabel, tint } from '@/styles/theme';
 import { formatRetentionPct } from '@/lib/utils';
 
 const ENC_PREFIX = 'ENC:';
@@ -205,7 +205,7 @@ export function LibraryPage() {
                 type="button"
                 onClick={() => setFilterCat(cat)}
                 className="tag capitalize"
-                style={filterCat === cat ? { color: categoryColors[cat], borderColor: `${categoryColors[cat]}55`, background: `${categoryColors[cat]}16` } : undefined}
+                style={filterCat === cat ? { color: categoryColors[cat], borderColor: tint(categoryColors[cat], 33), background: tint(categoryColors[cat], 9) } : undefined}
               >
                 {cat}
               </button>
@@ -286,7 +286,7 @@ export function LibraryPage() {
                     onClick={(e) => { e.stopPropagation(); toggleSelect(chunk.chunk_id); }}
                     className={cn(
                       'mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                      isSelected ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-[var(--border-strong)] bg-[var(--surface)]'
+                      isSelected ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)]' : 'border-[var(--border-strong)] bg-[var(--surface)]'
                     )}
                   >
                     {isSelected && <Check size={11} />}
@@ -301,10 +301,10 @@ export function LibraryPage() {
                       {isEncrypted ? 'Encrypted note' : chunk.content}
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="tag capitalize" style={{ color: categoryColors[category], borderColor: `${categoryColors[category]}44`, background: `${categoryColors[category]}14` }}>
+                      <span className="tag capitalize" style={{ color: categoryColors[category], borderColor: tint(categoryColors[category], 27), background: tint(categoryColors[category], 8) }}>
                         {category}
                       </span>
-                      <span className="tag" style={{ color, borderColor: `color-mix(in oklab, ${color} 27%, transparent)`, background: `color-mix(in oklab, ${color} 8%, transparent)` }}>
+                      <span className="tag" style={{ color, borderColor: tint(color, 27), background: tint(color, 8) }}>
                         {retentionToLabel(retention)}
                       </span>
                       {chunk.folder && <span className="tag"><FolderOpen size={12} /> {chunk.folder}</span>}
@@ -346,7 +346,7 @@ export function LibraryPage() {
       </section>
 
       {confirmBulkDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-4">
           <div className="app-card w-full max-w-sm p-5 shadow-[var(--shadow)]">
             <h3 className="font-bold text-[var(--text-1)]">Delete {selected.size} chunks?</h3>
             <p className="mt-2 text-sm text-[var(--text-3)]">This permanently removes them from your knowledge base.</p>

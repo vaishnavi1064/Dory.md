@@ -72,21 +72,21 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-[var(--bg)] p-4 text-[var(--text-1)]">
       <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-6xl overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="relative flex flex-col justify-between bg-hero p-8 text-background">
+        <section className="relative flex flex-col justify-between bg-hero p-8 text-hero-foreground">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-lavender text-hero animate-float">
               <Brain size={20} />
             </span>
             <div>
               <p className="text-lg font-bold tracking-[-0.02em]">Dory.md</p>
-              <p className="text-sm text-background/60">The notes app that remembers with you.</p>
+              <p className="text-sm text-hero-foreground/60">The notes app that remembers with you.</p>
             </div>
           </div>
 
           <div className="my-12 max-w-xl">
             <p className="app-label mb-3">Memory OS</p>
             <h1 className="text-4xl font-bold tracking-[-0.02em] leading-[1.08]">Track what you know before it quietly fades.</h1>
-            <p className="mt-4 text-lg leading-8 text-background/70">
+            <p className="mt-4 text-lg leading-8 text-hero-foreground/70">
               Dory turns files and notes into memory chunks, models retention decay, and gives you the next best review action.
             </p>
           </div>

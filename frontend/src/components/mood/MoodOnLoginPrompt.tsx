@@ -34,7 +34,7 @@ export function MoodOnLoginPrompt() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/35 p-4 pt-20"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-[var(--scrim)] p-4 pt-20"
       onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
     >
       <div className="app-card w-full max-w-lg p-4 shadow-[var(--shadow)]">

@@ -166,7 +166,7 @@ export function UploadModal({ onClose }: UploadModalProps) {
   const allDone = queue.length > 0 && done === queue.length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-4">
       <div className="app-card flex max-h-[90vh] w-full max-w-2xl flex-col shadow-[var(--shadow)]">
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <div className="flex items-center gap-3">

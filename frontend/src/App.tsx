@@ -20,6 +20,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { MoodOnLoginPrompt } from '@/components/mood/MoodOnLoginPrompt';
 import { startWellnessScheduler, stopWellnessScheduler } from '@/lib/wellness';
 import { startMeetingScheduler, stopMeetingScheduler } from '@/lib/meetingScheduler';
+import { watchSystemThemeMode } from '@/lib/themeMode';
 
 const pageVariants = {
   initial: { opacity: 0, y: 8 },
@@ -102,6 +103,8 @@ function AnimatedRoutes() {
 }
 
 export default function App() {
+  useEffect(() => watchSystemThemeMode(), []);
+
   return (
     <AuthProvider>
       <MoodOnLoginPrompt />

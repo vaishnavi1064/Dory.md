@@ -9,7 +9,7 @@ import type { Grade, ReviewCard } from '@/lib/types';
 
 const GRADES: { value: Grade; label: string; shortcut: string; color: string; description: string }[] = [
   { value: 1, label: 'Again', shortcut: '1', color: 'var(--danger)', description: 'Forgot it' },
-  { value: 2, label: 'Hard',  shortcut: '2', color: 'oklch(0.65 0.17 45)', description: 'Recalled with effort' },
+  { value: 2, label: 'Hard',  shortcut: '2', color: 'var(--weak)', description: 'Recalled with effort' },
   { value: 3, label: 'Good',  shortcut: '3', color: 'var(--warn)',  description: 'Recalled correctly' },
   { value: 4, label: 'Easy',  shortcut: '4', color: 'var(--good)',  description: 'Trivial' },
 ];
