@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Hero } from './sections/Hero';
+import { ProblemSection } from './sections/ProblemSection';
 import { TopNav } from './sections/TopNav';
 import './landing.css';
 
@@ -22,6 +23,7 @@ export function LandingPage() {
       <TopNav />
       <main>
         <Hero />
+        <ProblemSection />
       </main>
     </div>
   );
