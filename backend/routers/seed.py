@@ -168,7 +168,24 @@ _ACCESS_COUNTS = {
 # Real MiniLM similarities between distinct notes sit well below the product
 # default, so the demo corpus is linked at a lower bar to produce a graph worth
 # looking at. Scoped to this endpoint; SEMANTIC_EDGE_THRESHOLD is unchanged.
-DEMO_EDGE_THRESHOLD = 0.35
+#
+# Tuned against real MiniLM vectors over this exact corpus (87 notes, K=8).
+# Each row is the whole graph at that threshold:
+#
+#   tau    edges  components  largest  isolated  avg degree
+#   0.35      84          35       29        24        1.93   <- was this
+#   0.30     160          18       61        13        3.68
+#   0.25     273           6       82         5        6.28
+#   0.22     330           3       85         2        7.59   <- is this
+#   0.20     358           3       85         2        8.23
+#   0.10     455           1       87         0       10.46
+#
+# 0.22 is where the curve flattens: 0.20 adds 28 edges and connects nothing
+# further, and clearing the last two isolated notes needs tau <= 0.145, which is
+# below the noise floor of the embedding — at that bar a pasta recipe links to a
+# Kafka note and the graph stops meaning anything. K=8 (MAX_EDGES_PER_CHUNK)
+# caps density independently, so this stays a constellation, not a hairball.
+DEMO_EDGE_THRESHOLD = 0.22
 
 # Fixed seed so reloading the demo yields the same corpus every time.
 _RNG_SEED = 1064
