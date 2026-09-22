@@ -159,12 +159,18 @@ class StatsResponse(BaseModel):
 
 # ── Quiz ─────────────────────────────────────────────────────────────────────
 
-class QuizQuestion(BaseModel):
+class QuizQuestionPublic(BaseModel):
+    """What the client is allowed to see while the quiz is still being taken.
+
+    Deliberately has no correct_index. The answer key lives only in the server's
+    session store until the session is submitted; scoring was already
+    server-authoritative, but shipping the key with the questions meant anyone
+    with devtools could read the answers before choosing one.
+    """
     id: str                 # question id (= chunk_id for lookup in submit)
     chunk_id: str
     question: str
     options: list[str]
-    correct_index: int
     difficulty: str         # easy | medium | hard (derived from complexity_score)
     category: str
     retention: float
@@ -172,9 +178,17 @@ class QuizQuestion(BaseModel):
     hint: Optional[str] = None
 
 
+class QuizQuestion(QuizQuestionPublic):
+    """Server-internal: the question plus its answer. Never a response model."""
+    correct_index: int
+
+    def public(self) -> QuizQuestionPublic:
+        return QuizQuestionPublic(**self.model_dump(exclude={"correct_index"}))
+
+
 class QuizStartResponse(BaseModel):
     session_id: str
-    questions: list[QuizQuestion]
+    questions: list[QuizQuestionPublic]
     created_at: str
 
 
@@ -182,7 +196,11 @@ class QuizAnswerRequest(BaseModel):
     session_id: str
     chunk_id: str
     selected_index: int
-    correct_index: int
+    # The client no longer receives the key, so it cannot send one back. Kept
+    # optional for the legacy caller and for a session the server has lost after
+    # a restart; submit_answer prefers the server-side map and never rewards a
+    # client-supplied value (AUDIT P0-4).
+    correct_index: Optional[int] = None
 
 
 class QuizAnswerResponse(BaseModel):

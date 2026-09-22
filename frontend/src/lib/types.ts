@@ -34,12 +34,17 @@ export interface SearchResponse {
   total: number;
 }
 
+/** A question as served by POST /api/quiz/start.
+ *
+ * No correct_index: the answer key stays on the server until the session is
+ * submitted, so it cannot be read out of devtools mid-quiz. The answers come
+ * back per question on QuizResultItem after POST /api/quiz/{id}/submit.
+ */
 export interface QuizQuestion {
   id: string;
   chunk_id: string;
   question: string;
   options: string[];
-  correct_index: number;
   difficulty: QuizDifficulty;
   category: Category;
   hint?: string;

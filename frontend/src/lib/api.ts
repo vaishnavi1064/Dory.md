@@ -6,6 +6,7 @@ import type {
   DiscoveryResponse,
   SearchResponse,
   QuizSession,
+  QuizQuestion,
   QuizAnswer,
   QuizResults,
   IngestResponse,
@@ -86,10 +87,23 @@ export async function search(query: string): Promise<SearchResponse> {
   return apiFetch<SearchResponse>(`/api/search?q=${encodeURIComponent(query)}`);
 }
 
+/** The mock fixture still carries an answer key, because something has to score
+ *  the offline quiz. It is held here — the mock's stand-in for the server's
+ *  session store — and stripped before the questions reach the UI, so mock mode
+ *  has the same shape as the real API. */
+type MockQuizFile = Omit<QuizSession, 'questions'> & {
+  questions: (QuizQuestion & { correct_index: number })[];
+};
+const mockQuizFile = mockQuiz as MockQuizFile;
+const mockAnswerKey = new Map(mockQuizFile.questions.map((q) => [q.id, q.correct_index]));
+
 export async function startQuiz(category?: string): Promise<QuizSession> {
   if (config.useMocks) {
     await sleep(500);
-    return mockQuiz as QuizSession;
+    return {
+      ...mockQuizFile,
+      questions: mockQuizFile.questions.map(({ correct_index, ...question }) => question),
+    };
   }
   const qs = category ? `?category=${category}` : '';
   return apiFetch<QuizSession>(`/api/quiz/start${qs}`, { method: 'POST' });
@@ -101,19 +115,19 @@ export async function submitQuiz(
 ): Promise<QuizResults> {
   if (config.useMocks) {
     await sleep(600);
-    const correct = answers.filter(
-      (a, i) => a.selected_index === (mockQuiz as QuizSession).questions[i]?.correct_index
-    ).length;
+    const keyFor = (a: QuizAnswer) => mockAnswerKey.get(a.question_id) ?? 0;
+    const wasCorrect = (a: QuizAnswer) => a.selected_index === keyFor(a);
+    const correct = answers.filter(wasCorrect).length;
     return {
       session_id: sessionId,
       score: correct,
       total: answers.length,
-      results: answers.map((a, i) => ({
+      results: answers.map((a) => ({
         question_id: a.question_id,
-        correct: a.selected_index === (mockQuiz as QuizSession).questions[i]?.correct_index,
+        correct: wasCorrect(a),
         selected_index: a.selected_index,
-        correct_index: (mockQuiz as QuizSession).questions[i]?.correct_index ?? 0,
-        stability_delta: a.selected_index === (mockQuiz as QuizSession).questions[i]?.correct_index ? 12 : -4,
+        correct_index: keyFor(a),
+        stability_delta: wasCorrect(a) ? 12 : -4,
       })),
       xp_earned: correct * 50,
       streaks: correct,

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, XCircle, Lightbulb, ChevronRight, Timer } from 'lucide-react';
+import { CheckCircle2, Lightbulb, ChevronRight, Timer } from 'lucide-react';
 import type { QuizQuestion as QuizQuestionType } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { categoryColors } from '@/styles/theme';
@@ -13,23 +13,22 @@ interface QuizQuestionProps {
 
 export function QuizQuestion({ question, questionNumber, total, onAnswer }: QuizQuestionProps) {
   const [selected, setSelected] = useState<number | null>(null);
-  const [revealed, setRevealed] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [startTime] = useState(Date.now());
   const catColor = categoryColors[question.category] ?? 'var(--accent)';
   const progress = ((questionNumber - 1) / total) * 100;
 
+  // Answers are graded server-side and revealed on the results screen. The
+  // client is not told the correct option while the quiz is running, so the
+  // choice can be changed until it is committed with Next.
   function handleSelect(idx: number) {
-    if (revealed) return;
     setSelected(idx);
-    setRevealed(true);
   }
 
   function handleNext() {
     if (selected === null) return;
     onAnswer(selected, Date.now() - startTime);
     setSelected(null);
-    setRevealed(false);
     setShowHint(false);
   }
 
@@ -50,7 +49,7 @@ export function QuizQuestion({ question, questionNumber, total, onAnswer }: Quiz
       <div className="app-card p-5">
         <p className="text-lg font-bold leading-relaxed text-[var(--text-1)]">{question.question}</p>
 
-        {question.hint && !revealed && (
+        {question.hint && (
           <button type="button" onClick={() => setShowHint(!showHint)} className="btn-ghost mt-4">
             <Lightbulb size={15} />
             {showHint ? 'Hide hint' : 'Show hint'}
@@ -65,47 +64,45 @@ export function QuizQuestion({ question, questionNumber, total, onAnswer }: Quiz
 
         <div className="mt-5 space-y-2">
           {question.options.map((option, idx) => {
-            const isCorrect = idx === question.correct_index;
             const isSelected = idx === selected;
-            const state = revealed
-              ? isCorrect
-                ? 'correct'
-                : isSelected
-                  ? 'wrong'
-                  : 'muted'
-              : 'idle';
 
             return (
               <button
                 key={option}
                 type="button"
                 onClick={() => handleSelect(idx)}
-                disabled={revealed}
+                aria-pressed={isSelected}
                 className={cn(
                   'flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm font-bold transition',
-                  state === 'idle' && 'border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-2)] hover:border-[var(--accent-border)] hover:bg-[var(--surface)]',
-                  state === 'correct' && 'border-[color-mix(in_oklab,var(--good)_35%,transparent)] bg-[color-mix(in_oklab,var(--good)_10%,transparent)] text-[var(--good)]',
-                  state === 'wrong' && 'border-destructive/35 bg-destructive/10 text-destructive',
-                  state === 'muted' && 'border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-4)]'
+                  isSelected
+                    ? 'border-[var(--accent-border)] bg-[color-mix(in_oklab,var(--accent)_10%,transparent)] text-[var(--text-1)]'
+                    : 'border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-2)] hover:border-[var(--accent-border)] hover:bg-[var(--surface)]'
                 )}
               >
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-current/30 text-xs">
                   {String.fromCharCode(65 + idx)}
                 </span>
                 <span className="flex-1">{option}</span>
-                {state === 'correct' && <CheckCircle2 size={17} />}
-                {state === 'wrong' && <XCircle size={17} />}
+                {isSelected && <CheckCircle2 size={17} className="text-[var(--accent)]" />}
               </button>
             );
           })}
         </div>
 
-        {revealed && (
-          <button type="button" onClick={handleNext} className="btn-primary mt-5 w-full">
-            {questionNumber === total ? 'See results' : 'Next question'}
-            <ChevronRight size={15} />
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={handleNext}
+          disabled={selected === null}
+          className="btn-primary mt-5 w-full"
+        >
+          {questionNumber === total ? 'See results' : 'Next question'}
+          <ChevronRight size={15} />
+        </button>
+        <p className="mt-2 text-center text-sm text-[var(--text-4)]">
+          {questionNumber === total
+            ? 'Your answers are graded when you finish.'
+            : 'You can change your answer until you move on.'}
+        </p>
       </div>
     </div>
   );

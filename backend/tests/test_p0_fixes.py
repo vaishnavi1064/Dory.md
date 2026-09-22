@@ -113,7 +113,11 @@ def test_quiz_answer_ignores_client_supplied_correct_index(client, register_user
     body = client.post("/api/quiz/start", headers=h).json()
     session_id = body["session_id"]
     q0 = body["questions"][0]
-    server_correct = q0["correct_index"]
+    # The response no longer carries the answer (that is the point of
+    # test_quiz_start_does_not_ship_the_answer_key), so read it from the only
+    # place it exists: the server's session map.
+    from routers.quiz import _session_store
+    server_correct = _session_store[session_id][q0["chunk_id"]]["correct_index"]
 
     # Send the genuinely-correct selection but LIE about correct_index (99).
     res = client.post(
@@ -130,3 +134,66 @@ def test_quiz_answer_ignores_client_supplied_correct_index(client, register_user
     data = res.json()
     assert data["correct"] is True, "server should mark a genuinely-correct answer correct"
     assert data["correct_index"] == server_correct, "server must return its own correct_index, not the forged 99"
+
+
+# -- Answer-key disclosure -----------------------------------------------------
+
+def test_quiz_start_does_not_ship_the_answer_key(client, register_user):
+    """The key must stay server-side until the session is submitted.
+
+    Scoring was already server-authoritative (a client cannot forge a correct
+    answer), but /quiz/start used to return correct_index on every question, so
+    the answers were readable in devtools before choosing one.
+    """
+    _, token = register_user()
+    res = client.post("/api/quiz/start", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+
+    body = res.json()
+    assert body["questions"], "no questions to check"
+    for question in body["questions"]:
+        assert "correct_index" not in question, (
+            f"answer key leaked in /quiz/start: {sorted(question)}"
+        )
+    # Belt and braces: no answer-shaped key anywhere in the serialized payload.
+    assert "correct_index" not in res.text
+
+
+def test_quiz_submit_still_returns_the_answers_afterwards(client, register_user):
+    """Revealing at the end is the point — the results screen needs the key."""
+    _, token = register_user()
+    auth = {"Authorization": f"Bearer {token}"}
+    start = client.post("/api/quiz/start", headers=auth).json()
+
+    answers = [
+        {"question_id": q["id"], "selected_index": 0, "time_taken_ms": 100}
+        for q in start["questions"]
+    ]
+    res = client.post(
+        f"/api/quiz/{start['session_id']}/submit", json={"answers": answers}, headers=auth
+    )
+    assert res.status_code == 200
+    results = res.json()["results"]
+    assert len(results) == len(answers)
+    for item in results:
+        assert isinstance(item["correct_index"], int)
+
+
+def test_quiz_answer_works_without_a_client_supplied_key(client, register_user):
+    """The client can no longer send correct_index; the server must not need it."""
+    _, token = register_user()
+    auth = {"Authorization": f"Bearer {token}"}
+    start = client.post("/api/quiz/start", headers=auth).json()
+    question = start["questions"][0]
+
+    res = client.post(
+        "/api/quiz/answer",
+        json={
+            "session_id": start["session_id"],
+            "chunk_id": question["chunk_id"],
+            "selected_index": 0,
+        },
+        headers=auth,
+    )
+    assert res.status_code == 200, res.text
+    assert isinstance(res.json()["correct"], bool)

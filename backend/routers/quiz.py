@@ -102,7 +102,11 @@ def start_quiz(user_id: str = Depends(get_current_user_id)):
             f"fallback-{i}": {"correct_index": q["correct_index"], "chunk_id": f"fallback-{i}"}
             for i, q in enumerate(_FALLBACK_QUESTIONS)
         }
-        return QuizStartResponse(session_id=session_id, questions=questions, created_at=now_iso)
+        return QuizStartResponse(
+            session_id=session_id,
+            questions=[q.public() for q in questions],
+            created_at=now_iso,
+        )
 
     questions = []
     session_map = {}
@@ -121,7 +125,13 @@ def start_quiz(user_id: str = Depends(get_current_user_id)):
         session_map[q.id] = {"correct_index": q.correct_index, "chunk_id": row["id"]}
 
     _session_store[session_id] = session_map
-    return QuizStartResponse(session_id=session_id, questions=questions, created_at=now_iso)
+    # .public() is what strips correct_index; QuizStartResponse's model would
+    # drop it anyway, but converting explicitly keeps the intent visible here.
+    return QuizStartResponse(
+        session_id=session_id,
+        questions=[q.public() for q in questions],
+        created_at=now_iso,
+    )
 
 
 @router.post("/quiz/answer", response_model=QuizAnswerResponse)
@@ -133,7 +143,13 @@ def submit_answer(body: QuizAnswerRequest, user_id: str = Depends(get_current_us
     session = _session_store.get(body.session_id, {})
     meta = session.get(body.chunk_id)
     server_known = meta is not None
-    correct_index = meta["correct_index"] if server_known else body.correct_index
+    if server_known:
+        correct_index = meta["correct_index"]
+    else:
+        # Session lost (restart) and the client has no key to offer either, since
+        # /quiz/start stopped sending one. -1 matches no selection, so the answer
+        # scores as wrong rather than crashing the response model.
+        correct_index = body.correct_index if body.correct_index is not None else -1
     correct = body.selected_index == correct_index
     new_r = 0.0
     # Only a server-verified correct answer earns a retention reward, so a client
