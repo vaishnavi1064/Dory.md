@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Hero } from './sections/Hero';
 import { TopNav } from './sections/TopNav';
 import './landing.css';
 
@@ -19,7 +20,9 @@ export function LandingPage() {
   return (
     <div className="landing-root">
       <TopNav />
-      <main />
+      <main>
+        <Hero />
+      </main>
     </div>
   );
 }
