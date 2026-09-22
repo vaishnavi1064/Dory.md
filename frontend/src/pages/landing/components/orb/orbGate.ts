@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEnhancedViewport } from '../../viewport';
 
 /**
  * Who gets the WebGL orb, and what colour it is.
@@ -7,10 +7,6 @@ import { useEffect, useState } from 'react';
  * bundle and has to be able to decide *not* to load the canvas. Everything
  * WebGL lives behind the lazy ./OrbCanvas chunk.
  */
-
-/** The orb is pure decoration. Below this it would be a GPU context and a
- *  postprocessing pass spent on a screen with no room to show it. */
-const MIN_WIDTH_PX = 1024;
 
 let webglCache: boolean | null = null;
 
@@ -32,22 +28,10 @@ export function hasWebGL(): boolean {
   return webglCache;
 }
 
-/** Whether to mount the orb at all. Re-evaluates on resize so dragging a
- *  window wider brings it in rather than leaving a hole in the composition. */
+/** Whether to mount the orb at all. The width half is the page-wide gate; the
+ *  orb only adds the requirement that WebGL actually exists. */
 export function useOrbEnabled(): boolean {
-  const query = `(min-width: ${MIN_WIDTH_PX}px)`;
-  const [wide, setWide] = useState(() => window.matchMedia(query).matches);
-
-  useEffect(() => {
-    const mq = window.matchMedia(query);
-    const onChange = (e: MediaQueryListEvent) => setWide(e.matches);
-    // A resize between first render and this effect would otherwise be missed.
-    setWide(mq.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, [query]);
-
-  return wide && hasWebGL();
+  return useEnhancedViewport() && hasWebGL();
 }
 
 /** Literal fallback: the sRGB rendering of the light theme's --lavender. */

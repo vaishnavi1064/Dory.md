@@ -167,11 +167,16 @@ export function OrbCanvas() {
 
   // Scrolled past the hero, a background glow has no business holding a render
   // loop — let alone one with a postprocessing pass.
+  //
+  // The generous margin is load-bearing, not slack: the orb keeps dimming after
+  // it has left the viewport (see heroExit), and a loop that stopped at the
+  // edge would freeze the fade half-finished and hand it back mid-way on the
+  // way up. Half a viewport of headroom covers the whole hand-over.
   useEffect(() => {
     const node = root.current;
     if (!node || typeof IntersectionObserver === 'undefined') return;
     const io = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), {
-      rootMargin: '160px',
+      rootMargin: '60% 0px',
     });
     io.observe(node);
     return () => io.disconnect();

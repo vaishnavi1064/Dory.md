@@ -1,6 +1,7 @@
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
+import { ENHANCED_WIDTH_QUERY } from '../viewport';
 import { buildHeroExit } from './heroExit';
 import { resetScrollSignals } from './signals';
 
@@ -21,12 +22,18 @@ import { resetScrollSignals } from './signals';
 gsap.registerPlugin(ScrollTrigger);
 
 /**
- * Smooth scrolling and scroll-linked motion are both desktop-and-willing only.
- * Below this the layout is a single column with nothing to reveal, and a
- * reduced-motion request means the page should behave like any other page:
- * native scroll, sections simply present.
+ * Smooth scrolling and scroll-linked motion are both wide-and-willing only.
+ * Narrower than the shared gate the layout is a single column with nothing to
+ * reveal, and a reduced-motion request means the page should behave like any
+ * other page: native scroll, sections simply present.
+ *
+ * The width half comes from ../viewport rather than a number typed here. That
+ * is not tidiness — this file used to carry its own 1024, which disagreed with
+ * the slab's 768, and the whole engine quietly declined to start on any desktop
+ * between the two.
  */
-const ACTIVE = '(min-width: 1024px) and (prefers-reduced-motion: no-preference)';
+const CALM = '(prefers-reduced-motion: reduce)';
+const ACTIVE = `${ENHANCED_WIDTH_QUERY} and (prefers-reduced-motion: no-preference)`;
 
 /** Roughly one wheel notch of easing. Long enough to feel smooth, short enough
  *  that the page still feels attached to the wheel. */
@@ -37,6 +44,24 @@ const LENIS_DURATION = 1.05;
  * was: native scroll, no triggers, every signal at rest.
  */
 export function startScrollEngine(): () => void {
+  // Say out loud whether the engine is running and, if not, which gate turned
+  // it away. Every failure here is otherwise completely silent — the page just
+  // scrolls, which is also exactly what success looks like from the outside.
+  // One look at <html data-scroll-engine> in devtools settles it.
+  const root = document.documentElement;
+  const wide = window.matchMedia(ENHANCED_WIDTH_QUERY);
+  const calm = window.matchMedia(CALM);
+  const stamp = () => {
+    root.dataset.scrollEngine = calm.matches
+      ? 'off:reduced-motion'
+      : wide.matches
+        ? 'on'
+        : 'off:narrow';
+  };
+  stamp();
+  wide.addEventListener('change', stamp);
+  calm.addEventListener('change', stamp);
+
   const mm = gsap.matchMedia();
 
   mm.add(ACTIVE, () => {
@@ -89,6 +114,9 @@ export function startScrollEngine(): () => void {
   });
 
   return () => {
+    wide.removeEventListener('change', stamp);
+    calm.removeEventListener('change', stamp);
+    delete root.dataset.scrollEngine;
     // Reverts the tweens, the inline styles they wrote, and the media context's
     // own cleanup above.
     mm.revert();
