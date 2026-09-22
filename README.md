@@ -76,7 +76,7 @@ flowchart LR
 
 - Python 3.11+ (CI runs on 3.12)
 - Node 18+
-- Optional: a free [Groq API key](https://console.groq.com) for LLM-generated quizzes and categorization. Without it, those features degrade gracefully.
+- Optional: a free [Groq API key](https://console.groq.com) for LLM-generated quizzes, categorization, and the AI note tools. Without it quizzes and categorization fall back automatically; the AI note tools report that they are unconfigured (see the environment notes below).
 
 ### 1. Clone
 
@@ -102,13 +102,24 @@ First start downloads the MiniLM model (~90 MB) and warms it; later starts are f
 Backend environment variables (`backend/.env`):
 
 ```bash
-DORY_ENV=dev                          # 'dev' uses a permissive JWT default for local runs
-JWT_SECRET=                           # REQUIRED when DORY_ENV != dev
+DORY_ENV=dev                          # dev | development enable demo login and disable rate limits
+DORY_JWT_SECRET=                      # REQUIRED in every environment — no fallback, the app
+                                      #   refuses to boot without it. Generate one with:
+                                      #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+DORY_CORS_ORIGINS=http://localhost:5173   # comma-separated list of exact allowed origins
 LLM_PROVIDER=groq                     # groq | openai | anthropic | ollama
 LLM_MODEL=llama-3.3-70b-versatile     # Groq default; change per provider
-GROQ_API_KEY=                         # optional — LLM features degrade gracefully without it
-FRONTEND_URL=http://localhost:5173
+GROQ_API_KEY=                         # optional — see the note below
 ```
+
+`backend/.env.example` is the authoritative list and documents every variable the
+code reads; the block above is the subset you need to get running.
+
+Without `GROQ_API_KEY`, quiz generation falls back to a built-in question bank and
+category classification leaves notes as "Other" — both still work. The three
+note-authoring AI endpoints (`/api/ai/summarize`, `/api/ai/expand`,
+`/api/ai/optimize`) have nothing honest to fall back to, so they return
+`503 Service Unavailable` with a message saying the feature needs a key.
 
 ### 3. Frontend
 
