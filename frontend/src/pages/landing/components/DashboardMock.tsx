@@ -12,8 +12,11 @@ import { BookOpen, BrainCircuit, Search, Sparkles, Upload } from 'lucide-react';
  * surface the visitor is meant to interact with. It keeps its look in both
  * themes.
  *
- * The 3D tilt lives on the wrapper (.landing-stage / .landing-tilt in Hero), so
- * an R3F replacement can drop into the same slot without touching layout.
+ * Tier 2 did not replace this — it promoted it. DashboardSlab renders this very
+ * markup as the *front face* of a CSS 3D slab (see Slab3D), which is the whole
+ * reason the slab is CSS rather than WebGL: the dashboard stays live DOM and
+ * its type stays crisp. On narrow screens it is still the flat tilted picture
+ * it always was.
  */
 
 const BUCKETS = [

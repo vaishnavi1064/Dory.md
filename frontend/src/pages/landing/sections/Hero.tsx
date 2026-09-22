@@ -1,18 +1,11 @@
-import { useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ArrowRight, BrainCircuit, CalendarCheck, Play, Search, Sparkles } from 'lucide-react';
 import { Annotation } from '../components/Annotation';
-import { DashboardMock } from '../components/DashboardMock';
+import { DashboardSlab } from '../components/DashboardSlab';
 import { FloatingChips } from '../components/FloatingChips';
 import { GlowOrb } from '../components/GlowOrb';
-import {
-  maskedLineChild,
-  maskedLineParent,
-  mockEntrance,
-  riseIn,
-  useMotionPolicy,
-} from '../motion';
+import { maskedLineChild, maskedLineParent, riseIn, useMotionPolicy } from '../motion';
 
 const HEADLINE = ['Remember what', 'matters.'];
 
@@ -24,42 +17,8 @@ const FEATURES = [
 
 const STACK = ['Python', 'React', 'FastAPI', 'ChromaDB', 'FSRS'];
 
-/** How far the mock rotates toward the pointer, in degrees. Small on purpose —
- *  it should read as parallax, not as a toy. */
-const TILT = 6;
-
-function useCursorTilt(enabled: boolean) {
-  const ref = useRef<HTMLDivElement>(null);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const spring = { stiffness: 120, damping: 18, mass: 0.6 };
-  const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-TILT, TILT]), spring);
-  const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [TILT, -TILT]), spring);
-
-  function onPointerMove(e: React.PointerEvent) {
-    // Coarse pointers (touch) have no hover state to track, and reduced-motion
-    // users opted out of exactly this kind of continuous movement.
-    if (!enabled || e.pointerType !== 'mouse') return;
-    const box = ref.current?.getBoundingClientRect();
-    if (!box) return;
-    x.set((e.clientX - box.left) / box.width - 0.5);
-    y.set((e.clientY - box.top) / box.height - 0.5);
-  }
-
-  function onPointerLeave() {
-    x.set(0);
-    y.set(0);
-  }
-
-  return { ref, rotateX, rotateY, onPointerMove, onPointerLeave };
-}
-
 export function Hero() {
   const { reduced, variants } = useMotionPolicy();
-  const tilt = useCursorTilt(!reduced);
-
-  // The mock sits at a fixed angle and the cursor nudges it from there.
-  const baseRotateY = reduced ? 0 : -13;
 
   return (
     <section id="product" className="landing-band-dark relative overflow-hidden">
@@ -164,28 +123,11 @@ export function Hero() {
             A second brain that remembers with you
           </Annotation>
 
-          <div
-            className="landing-stage relative"
-            ref={tilt.ref}
-            onPointerMove={tilt.onPointerMove}
-            onPointerLeave={tilt.onPointerLeave}
-          >
-            <motion.div
-              className="landing-tilt relative"
-              variants={variants(mockEntrance)}
-              initial="hidden"
-              animate="shown"
-              style={
-                reduced
-                  ? undefined
-                  : { rotateX: tilt.rotateX, rotateY: tilt.rotateY }
-              }
-            >
-              <div style={{ transform: `rotateY(${baseRotateY}deg)` }}>
-                <DashboardMock />
-              </div>
-            </motion.div>
-
+          {/* The product shot owns its own tilt, entrance and perspective:
+              DashboardSlab serves either the flat mock or the spinnable slab
+              into this same box. */}
+          <div className="landing-stage relative">
+            <DashboardSlab />
             <FloatingChips />
           </div>
         </div>
