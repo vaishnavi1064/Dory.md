@@ -36,11 +36,14 @@ const CHIPS = [
 
 export function FloatingChips() {
   return (
-    <>
+    // A flat layer of its own, stretched over the stage and stacked above the
+    // slab. The chips must never join the slab's 3D context — they are labels
+    // pointing at the product, not parts of it, and would otherwise turn (and
+    // disappear) with it. See .landing-chip-layer.
+    <div className="landing-chip-layer" aria-hidden>
       {CHIPS.map((chip) => (
         <div
           key={chip.text}
-          aria-hidden
           className={`landing-mock-chip ${chip.primary ? '' : 'hidden md:inline-flex'}`}
           style={{ ...chip.style, animationDelay: chip.delay }}
         >
@@ -48,6 +51,6 @@ export function FloatingChips() {
           {chip.text}
         </div>
       ))}
-    </>
+    </div>
   );
 }

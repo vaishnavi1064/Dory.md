@@ -290,6 +290,29 @@
   border-radius: 10px;
 }
 
+/* The chips live in their own flat layer over the product shot rather than
+   loose in the stage. Two reasons, both learned the hard way:
+
+   - .landing-stage carries a perspective, so anything directly inside it is a
+     candidate for the 3D scene. The chips are annotations *about* the slab, so
+     they stay resolutely 2D — this layer has no transform, which makes it an
+     ordinary flattening parent for them.
+   - an explicit z-index pins them above the slab for good, instead of relying
+     on being later siblings. That is what broke: .landing-slab is not a
+     stacking context, so .landing-slab-scene's z-index: 1 resolved against the
+     stage (a perspective makes one) and beat chips sitting at level 0.
+
+   inset: 0 makes the layer's box identical to the stage's, so the chips' own
+   percentage offsets (including the negative ones that hang them off the edge
+   of the card) resolve exactly as they did before. */
+.landing-chip-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  /* Never eat a grab aimed at the slab underneath. */
+  pointer-events: none;
+}
+
 .landing-mock-chip {
   position: absolute;
   display: inline-flex;
@@ -328,6 +351,11 @@
 
 .landing-slab {
   position: relative;
+  /* Seals the slab's internal layering in. Without a stacking context here the
+     scene's and the shade's z-indexes resolve against .landing-stage and
+     compete with everything else in it — which is exactly how the scene ended
+     up painting over the floating chips. */
+  isolation: isolate;
   user-select: none;
   -webkit-user-select: none;
 
