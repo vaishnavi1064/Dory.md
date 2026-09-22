@@ -39,11 +39,12 @@ import {
 /* ─── Demo data: works against /api/seed ──────────────────────────── */
 
 function DemoDataSection() {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'skipped'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [msg, setMsg] = useState('');
 
   async function handleSeed() {
     setStatus('loading');
+    setMsg('');
     const send = async (tok: string | null) =>
       fetch(`${config.apiBaseUrl}/api/seed`, {
         method: 'POST',
@@ -56,16 +57,35 @@ function DemoDataSection() {
         const refreshed = await refreshAccessToken();
         if (refreshed) res = await send(refreshed);
       }
-      const data = await res.json();
-      setMsg(data.message ?? 'Demo data request complete.');
-      setStatus(data.seeded > 0 ? 'done' : 'skipped');
+
+      // A body can be absent or not JSON at all (a proxy 502, say), so the
+      // status is the source of truth about success — not the payload.
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        const detail = typeof data?.detail === 'string' ? data.detail : null;
+        setMsg(detail ?? `Could not load demo data (HTTP ${res.status}).`);
+        setStatus('error');
+        return;
+      }
+
+      setMsg(data?.message ?? 'Demo data loaded.');
+      setStatus('done');
     } catch {
-      setMsg('Could not reach backend.');
-      setStatus('idle');
+      setMsg('Could not reach the backend. Is it running?');
+      setStatus('error');
     }
   }
 
-  const busy = status === 'loading' || status === 'done' || status === 'skipped';
+  // Only the in-flight request blocks the button. Reseeding is idempotent by
+  // replacement, and refreshing a corpus that has decayed since it was loaded is
+  // the normal thing to want before a demo.
+  const busy = status === 'loading';
+  const tone =
+    status === 'done' ? 'text-[var(--good)]'
+    : status === 'error' ? 'text-[var(--danger)]'
+    : 'text-[var(--text-2)]';
+
   return (
     <div className="app-card p-5">
       <div className="mb-2 flex items-center gap-2">
@@ -77,12 +97,12 @@ function DemoDataSection() {
         graph. Safe to run again — it replaces the previous demo set rather than adding to it.
       </p>
       {msg && (
-        <p className={`mt-3 text-sm font-medium ${status === 'done' ? 'text-[var(--good)]' : 'text-[var(--text-2)]'}`}>
+        <p className={`mt-3 text-sm font-medium ${tone}`} role="status" aria-live="polite">
           {msg}
         </p>
       )}
       <button type="button" onClick={handleSeed} disabled={busy} className="btn-primary mt-4">
-        {status === 'loading' ? 'Loading…' : status === 'done' ? 'Loaded' : status === 'skipped' ? 'Already loaded' : 'Load demo data'}
+        {status === 'loading' ? 'Loading…' : status === 'done' ? 'Reload demo data' : 'Load demo data'}
       </button>
     </div>
   );
