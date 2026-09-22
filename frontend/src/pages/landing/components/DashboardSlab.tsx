@@ -70,7 +70,7 @@ export function DashboardSlab() {
       className="landing-slab"
       ref={grab}
       data-mode={mode}
-      data-spin={spinnable && !reduced ? 'on' : 'off'}
+      data-grab={spinnable ? 'on' : 'off'}
       variants={variants(mockEntrance)}
       initial="hidden"
       animate="shown"
@@ -79,7 +79,7 @@ export function DashboardSlab() {
 
       <div className="landing-slab-scene">
         {spinnable ? (
-          <Slab3D grab={grab} spin={!reduced} />
+          <Slab3D grab={grab} reduced={reduced} />
         ) : (
           <motion.div
             className="landing-tilt"

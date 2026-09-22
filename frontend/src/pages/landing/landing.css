@@ -365,16 +365,27 @@
   --slab-corner: 16px;
 }
 
-/* Only the spinnable mode is grabbable. pan-y, not none: a horizontal drag is
-   ours, but a vertical swipe still scrolls the page — trapping the scroll over
-   a decorative hero graphic is the fastest way to feel broken on touch. */
-.landing-slab[data-spin='on'] {
+/* Only the slab mode is grabbable — including under reduced motion, where the
+   slab holds still but still answers a drag. pan-y, not none: a horizontal drag
+   is ours, but a vertical swipe still scrolls the page, and trapping the scroll
+   over a decorative hero graphic is the fastest way to feel broken on touch. */
+.landing-slab[data-grab='on'] {
   touch-action: pan-y;
   cursor: grab;
 }
 
-.landing-slab[data-spin='on'][data-grabbing='true'] {
+.landing-slab[data-grab='on'][data-grabbing='true'] {
   cursor: grabbing;
+}
+
+/* Widens the grab target past the card's own box. The slab floats and pitches a
+   few pixels beyond it, and more to the point an object you are invited to pick
+   up should not have a hairline-exact edge. Sits below the scene (z-index auto
+   against the scene's 1) so it only ever catches the overhang. */
+.landing-slab[data-grab='on']::after {
+  content: '';
+  position: absolute;
+  inset: -5% -4%;
 }
 
 /* Carries the perspective itself rather than inheriting .landing-stage's: the
@@ -656,12 +667,10 @@
     transform: none !important;
   }
 
-  /* useSlabSpin already parks the slab facing front and never starts its loop;
-     this is the belt to that braces. preserve-3d survives transform: none, so
-     the box keeps its depth — it simply stops moving. */
-  .landing-slab-rotor {
-    transform: none !important;
-  }
+  /* No rotor rule here on purpose. It used to force transform: none !important,
+     which would now also flatten the pose a deliberate drag had just written.
+     useSlabSpin owns the reduced-motion behaviour: it parks the slab and never
+     starts a frame loop, so there is nothing left for CSS to stop. */
 
   .landing-slab-shade {
     transition: none !important;

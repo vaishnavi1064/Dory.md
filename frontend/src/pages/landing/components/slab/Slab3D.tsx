@@ -27,14 +27,15 @@ interface Slab3DProps {
    *  hit target should be the mock's footprint, not whatever the rotor happens
    *  to be showing mid-spin. */
   grab: RefObject<HTMLElement | null>;
-  /** False under reduced motion: the slab parks facing front and stays there. */
-  spin: boolean;
+  /** The OS asked for less motion: no drift, no float, no inertia. Still
+   *  draggable — see useSlabSpin. */
+  reduced: boolean;
 }
 
-export function Slab3D({ grab, spin }: Slab3DProps) {
+export function Slab3D({ grab, reduced }: Slab3DProps) {
   const rotor = useRef<HTMLDivElement>(null);
 
-  useSlabSpin({ rotor, grab, enabled: spin });
+  useSlabSpin({ rotor, grab, reduced });
 
   return (
     <div className="landing-slab-rotor" ref={rotor}>

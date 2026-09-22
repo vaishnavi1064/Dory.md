@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react';
 
-/** Below this the hero column is too narrow for a spinnable slab, and the
- *  device is probably a phone. Phones keep the flat tilted mock. */
-const MIN_WIDTH_PX = 1024;
+/**
+ * Below this the card is too narrow to turn and the device is almost certainly
+ * a phone, so it keeps the flat tilted mock.
+ *
+ * This was 1024, which turned out to be far too greedy: a viewport is CSS
+ * pixels, not hardware ones, so a 1440px window at 150% browser zoom reports
+ * 960 — and a 1366px laptop at Windows' 150% display scaling reports 910.
+ * Plenty of ordinary desktops fell through to the flat mock. md (768) is the
+ * breakpoint the hero already uses for the secondary chips, and the slab has
+ * room from there up.
+ */
+const MIN_WIDTH_PX = 768;
 
 export type SlabMode = 'flat' | 'slab';
 
