@@ -3,11 +3,17 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, Brain, CheckCircle2, Activity, Search, BrainCircuit } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
-export function LoginPage() {
+interface LoginPageProps {
+  /** Which tab opens first. /register routes in at 'register' so the landing
+   *  page's "Get started" lands on the sign-up form, not the sign-in one. */
+  initialMode?: 'login' | 'register';
+}
+
+export function LoginPage({ initialMode = 'login' }: LoginPageProps = {}) {
   const { login, register } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +51,7 @@ export function LoginPage() {
         setError('Invalid email or password.');
         return;
       }
-      navigate('/');
+      navigate('/dashboard');
       return;
     }
 
@@ -66,7 +72,7 @@ export function LoginPage() {
       setError(result);
       return;
     }
-    navigate('/');
+    navigate('/dashboard');
   }
 
   return (

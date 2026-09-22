@@ -18,7 +18,7 @@ interface HeaderProps {
 }
 
 const pageMeta: Record<string, { title: string; detail: string }> = {
-  '/': { title: 'Memory health', detail: 'Watch retention, risk, and review timing.' },
+  '/dashboard': { title: 'Memory health', detail: 'Watch retention, risk, and review timing.' },
   '/search': { title: 'Discovery search', detail: 'Find the right chunk before it fades.' },
   '/quiz': { title: 'Practice', detail: 'Turn weak memories into stronger ones.' },
   '/library': { title: 'Library', detail: 'Browse, organize, edit, and protect chunks.' },
@@ -39,7 +39,7 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
   const [askMoodEnabled, setAskMoodEnabled] = useState(isMoodAskEnabled);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
-  const meta = pageMeta[location.pathname] ?? pageMeta['/'];
+  const meta = pageMeta[location.pathname] ?? pageMeta['/dashboard'];
 
   // Close the mobile nav whenever the route changes.
   useEffect(() => { setMobileNavOpen(false); }, [location.pathname]);
@@ -89,7 +89,7 @@ export function Header({ hasDiscovery, onDiscoveryClick }: HeaderProps) {
           >
             <Menu size={18} />
           </button>
-          <Link to="/" className="flex shrink-0 items-center gap-2">
+          <Link to="/dashboard" className="flex shrink-0 items-center gap-2">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent)] text-[var(--on-accent)]">
               <Brain size={18} />
             </span>

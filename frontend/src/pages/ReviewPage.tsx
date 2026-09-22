@@ -111,7 +111,7 @@ export function ReviewPage() {
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
 
       if (e.key === 'Escape') {
-        navigate('/');
+        navigate('/dashboard');
         return;
       }
       if (!current) return;
@@ -149,7 +149,7 @@ export function ReviewPage() {
           <p className="mt-1 text-sm text-[var(--text-3)]">
             No memories are due for review right now. Come back tomorrow.
           </p>
-          <Link to="/" className="btn-primary mt-5 inline-flex">
+          <Link to="/dashboard" className="btn-primary mt-5 inline-flex">
             <ArrowLeft size={14} /> Back to dashboard
           </Link>
         </div>
@@ -194,7 +194,7 @@ export function ReviewPage() {
           </div>
 
           <div className="mt-6 flex gap-2">
-            <Link to="/" className="btn-secondary flex-1 justify-center">
+            <Link to="/dashboard" className="btn-secondary flex-1 justify-center">
               <ArrowLeft size={14} /> Dashboard
             </Link>
             {tomorrow > 0 && (
@@ -219,7 +219,7 @@ export function ReviewPage() {
       <div className="mb-4 flex items-center gap-4">
         <button
           type="button"
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/dashboard')}
           className="btn-ghost p-2"
           aria-label="Exit review"
           title="Exit (Esc)"

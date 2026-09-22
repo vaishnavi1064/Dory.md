@@ -15,6 +15,7 @@ import { PomodoroPage } from '@/pages/PomodoroPage';
 import { MoodDashboard } from '@/pages/MoodDashboard';
 import { GraphPage } from '@/pages/GraphPage';
 import { LoginPage } from '@/pages/LoginPage';
+import { LandingPage } from '@/pages/landing/LandingPage';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { MoodOnLoginPrompt } from '@/components/mood/MoodOnLoginPrompt';
@@ -65,7 +66,13 @@ function AnimatedRoutes() {
     <AnimatePresence mode="wait">
       <motion.div key={location.pathname} variants={pageVariants} initial="initial" animate="animate" exit="exit" className="h-full">
         <Routes location={location}>
+          {/* Public, ungated. `/` is the marketing page for logged-out
+              visitors; a signed-in user simply sees it too and can click
+              through — no forced redirect, so the URL always does what it
+              says. The app itself starts at /dashboard. */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<LoginPage initialMode="register" />} />
           <Route path="/*" element={
             <ProtectedRoute>
               <WellnessScheduler />
@@ -73,7 +80,7 @@ function AnimatedRoutes() {
               <AppShell>
                 <ErrorBoundary>
                   <Routes>
-                    <Route path="/"         element={<Dashboard />} />
+                    <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/search"   element={<SearchPage />} />
                     <Route path="/quiz"     element={<QuizPage />} />
                     <Route path="/review"   element={<ReviewPage />} />

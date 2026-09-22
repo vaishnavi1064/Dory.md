@@ -22,7 +22,7 @@ export const navGroups: NavGroup[] = [
   {
     label: 'Recall loop',
     items: [
-      { to: '/',         label: 'Health',   icon: Activity, exact: true },
+      { to: '/dashboard', label: 'Health',   icon: Activity, exact: true },
       { to: '/search',   label: 'Discover', icon: Search },
       { to: '/library',  label: 'Library',  icon: BookOpen },
       { to: '/review',   label: 'Practice', icon: BrainCircuit },
