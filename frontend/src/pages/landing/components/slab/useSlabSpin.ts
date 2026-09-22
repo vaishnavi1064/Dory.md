@@ -47,6 +47,21 @@ const STALE_THROW_MS = 90;
 const FLOAT_SPEED = 0.55;
 const FLOAT_AMP_PX = 7;
 
+/**
+ * Hover hint. A small offset layered on top of the resting pose so the slab
+ * leans toward the cursor before anyone thinks to grab it — the object saying
+ * "I answer to you", which is the only affordance a 3D card really has.
+ *
+ * Deliberately a fraction of what a drag gives you (a drag is ~0.5deg per
+ * pixel, so half a card's width is 130deg): enough to notice at the edge of
+ * vision, not enough to compete with the drift it rides on.
+ */
+const HOVER_YAW = 6;
+const HOVER_PITCH = 4;
+/** e-folds per second toward the hover target. ~0.2s to settle: quick enough
+ *  to feel connected to the mouse, slow enough not to twitch. */
+const HOVER_EASE = 5;
+
 /** Resting pose. The yaw matches the Tier-1 mock's fixed angle, so switching
  *  between the flat fallback and the slab does not move the picture. */
 const REST_YAW = -13;
@@ -61,6 +76,12 @@ interface SpinState {
   yaw: number;
   pitch: number;
   float: number;
+  /** Hover lean, eased. Added on top of yaw/pitch only at write time, so it
+   *  never contaminates the spin itself — the drift keeps its own heading. */
+  hoverYaw: number;
+  hoverPitch: number;
+  hoverToYaw: number;
+  hoverToPitch: number;
   yawVel: number;
   pitchVel: number;
   clock: number;
@@ -78,6 +99,10 @@ function restState(): SpinState {
     yaw: REST_YAW,
     pitch: REST_PITCH,
     float: 0,
+    hoverYaw: 0,
+    hoverPitch: 0,
+    hoverToYaw: 0,
+    hoverToPitch: 0,
     yawVel: 0,
     pitchVel: 0,
     clock: 0,
@@ -94,8 +119,8 @@ function write(el: HTMLElement, s: SpinState) {
   // Read right-to-left: yaw, then pitch, then the float in the parent's frame —
   // the same order three.js applies an XYZ Euler, so the feel carries over.
   el.style.transform = `translateY(${round(s.float)}px) rotateX(${round(
-    s.pitch,
-  )}deg) rotateY(${round(s.yaw)}deg)`;
+    s.pitch + s.hoverPitch,
+  )}deg) rotateY(${round(s.yaw + s.hoverYaw)}deg)`;
 }
 
 export interface SlabSpinOptions {
@@ -161,6 +186,13 @@ export function useSlabSpin({ rotor, grab, reduced }: SlabSpinOptions) {
       if (s.yaw > DEG) s.yaw -= DEG;
       else if (s.yaw < -DEG) s.yaw += DEG;
 
+      // Outside the !dragging block on purpose: once the pointer goes down the
+      // target is zero, and this is what walks the lean back out of the way
+      // rather than leaving it fighting the drag.
+      const settle = 1 - Math.exp(-HOVER_EASE * dt);
+      s.hoverYaw += (s.hoverToYaw - s.hoverYaw) * settle;
+      s.hoverPitch += (s.hoverToPitch - s.hoverPitch) * settle;
+
       s.float = Math.sin(s.clock * FLOAT_SPEED) * FLOAT_AMP_PX;
       write(el, s);
 
@@ -179,7 +211,27 @@ export function useSlabSpin({ rotor, grab, reduced }: SlabSpinOptions) {
     };
 
     // ── grab ────────────────────────────────────────────────────────────────
+    // The lean that says "I answer to you" before anyone thinks to grab.
+    const aimHover = (e: PointerEvent) => {
+      const box = surface.getBoundingClientRect();
+      if (!box.width || !box.height) return;
+      // -1 at one edge of the card, +1 at the other. Clamped because the grab
+      // area reaches a little past the card itself (.landing-slab::after), and
+      // the hint should top out at the stated angle wherever you approach from.
+      const nx = clamp((e.clientX - box.left) / box.width - 0.5, -0.5, 0.5) * 2;
+      const ny = clamp((e.clientY - box.top) / box.height - 0.5, -0.5, 0.5) * 2;
+      s.hoverToYaw = nx * HOVER_YAW;
+      s.hoverToPitch = ny * HOVER_PITCH;
+    };
+
+    const clearHover = () => {
+      s.hoverToYaw = 0;
+      s.hoverToPitch = 0;
+    };
+
     const onDown = (e: PointerEvent) => {
+      // The hint has done its job; hand the slab over to the drag.
+      clearHover();
       s.dragging = true;
       s.yawVel = 0;
       s.pitchVel = 0;
@@ -195,7 +247,12 @@ export function useSlabSpin({ rotor, grab, reduced }: SlabSpinOptions) {
     };
 
     const onMove = (e: PointerEvent) => {
-      if (!s.dragging) return;
+      if (!s.dragging) {
+        // Mouse only: a finger has no hover state to track, and reduced motion
+        // opted out of exactly this kind of unasked-for movement.
+        if (!reduced && e.pointerType === 'mouse') aimHover(e);
+        return;
+      }
       const dx = e.clientX - s.lastX;
       const dy = e.clientY - s.lastY;
       // A 240Hz pointer can report two events in the same millisecond; floor
@@ -239,6 +296,7 @@ export function useSlabSpin({ rotor, grab, reduced }: SlabSpinOptions) {
 
     surface.addEventListener('pointerdown', onDown);
     surface.addEventListener('pointermove', onMove);
+    surface.addEventListener('pointerleave', clearHover);
     surface.addEventListener('pointerup', onUp);
     surface.addEventListener('pointercancel', onUp);
 
@@ -265,6 +323,7 @@ export function useSlabSpin({ rotor, grab, reduced }: SlabSpinOptions) {
       io?.disconnect();
       surface.removeEventListener('pointerdown', onDown);
       surface.removeEventListener('pointermove', onMove);
+      surface.removeEventListener('pointerleave', clearHover);
       surface.removeEventListener('pointerup', onUp);
       surface.removeEventListener('pointercancel', onUp);
       delete surface.dataset.grabbing;
