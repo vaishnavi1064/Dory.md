@@ -90,6 +90,17 @@
   .landing-shell { padding-inline: 2rem; }
 }
 
+/* Sticky nav. Needs a real class: `bg-[var(--landing-deep)]/90` is silently
+   dropped by Tailwind, because an alpha modifier cannot be applied to an
+   arbitrary value that is already a complete colour. Without this the bar is
+   fully opaque and the backdrop-blur behind it does nothing. */
+.landing-nav {
+  background: color-mix(in oklab, var(--landing-deep) 88%, transparent);
+}
+
+/* .landing-root uses overflow-x: clip rather than hidden on purpose — `hidden`
+   would make it a scroll container and break the sticky nav inside it. */
+
 /* ── Type ────────────────────────────────────────────────────────────────── */
 
 /* The mockup's headline is a high-contrast serif. Manrope is the app face, so

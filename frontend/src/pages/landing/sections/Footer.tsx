@@ -8,7 +8,7 @@ const COLUMNS = [
     title: 'Product',
     links: [
       { label: 'Features', to: '#features' },
-      { label: 'Time machine', to: '#faq' },
+      { label: 'Time machine', to: '#time-machine' },
       { label: 'Memory health', to: '#product' },
       { label: 'Pricing', to: '#start' },
     ],

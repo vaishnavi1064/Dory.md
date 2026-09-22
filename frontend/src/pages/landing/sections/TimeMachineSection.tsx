@@ -63,7 +63,7 @@ export function TimeMachineSection() {
   const { variants } = useMotionPolicy();
 
   return (
-    <SectionReveal id="faq" className="landing-band-soft border-t border-[var(--border)]">
+    <SectionReveal id="time-machine" className="landing-band-soft border-t border-[var(--border)]">
       <div className="landing-shell grid items-center gap-14 py-20 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1fr)] lg:gap-16 lg:py-28">
         {/* ── Left: the pitch ── */}
         <div className="relative">

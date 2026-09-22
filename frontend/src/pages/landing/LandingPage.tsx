@@ -21,7 +21,7 @@ import './landing.css';
  *    ProblemSection   light   #science
  *    ApproachSection  light
  *    FeaturesSection  light   #features
- *    TimeMachine      light   #faq
+ *    TimeMachine      light   #time-machine
  *    FinalCta         dark    #start
  *    Footer           dark
  */

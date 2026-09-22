@@ -5,15 +5,15 @@ import { Brain, Menu, X } from 'lucide-react';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { riseIn, useMotionPolicy } from '../motion';
 
-/** Anchor targets are the section ids rendered by LandingPage. Pricing has no
- *  section yet, so it points at the final CTA — a real destination rather than
- *  a dead '#'. */
+/** Anchor targets are the section ids rendered by LandingPage. Pricing and FAQ
+ *  have no section yet, so both point at the final CTA — a real destination
+ *  rather than a dead '#' or a link that lands somewhere unrelated. */
 const LINKS = [
   { label: 'Product', href: '#product' },
   { label: 'Features', href: '#features' },
   { label: 'Science', href: '#science' },
   { label: 'Pricing', href: '#start' },
-  { label: 'FAQ', href: '#faq' },
+  { label: 'FAQ', href: '#start' },
 ];
 
 function Wordmark() {
@@ -43,7 +43,7 @@ export function TopNav() {
 
   return (
     <motion.header
-      className="landing-band-dark sticky top-0 z-50 border-b border-[var(--landing-deep-border)] bg-[var(--landing-deep)]/90 backdrop-blur-md"
+      className="landing-band-dark landing-nav sticky top-0 z-50 border-b border-[var(--landing-deep-border)] backdrop-blur-md"
       variants={variants(riseIn(0))}
       initial="hidden"
       animate="shown"
