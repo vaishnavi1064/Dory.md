@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { ApproachSection } from './sections/ApproachSection';
+import { FeaturesSection } from './sections/FeaturesSection';
 import { Hero } from './sections/Hero';
 import { ProblemSection } from './sections/ProblemSection';
 import { TopNav } from './sections/TopNav';
@@ -24,6 +26,8 @@ export function LandingPage() {
       <main>
         <Hero />
         <ProblemSection />
+        <ApproachSection />
+        <FeaturesSection />
       </main>
     </div>
   );
