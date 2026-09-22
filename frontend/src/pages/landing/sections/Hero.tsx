@@ -5,6 +5,7 @@ import { Annotation } from '../components/Annotation';
 import { DashboardSlab } from '../components/DashboardSlab';
 import { FloatingChips } from '../components/FloatingChips';
 import { GlowOrb } from '../components/GlowOrb';
+import { HeroOrb } from '../components/orb/HeroOrb';
 import { maskedLineChild, maskedLineParent, riseIn, useMotionPolicy } from '../motion';
 
 const HEADLINE = ['Remember what', 'matters.'];
@@ -127,6 +128,7 @@ export function Hero() {
               DashboardSlab serves either the flat mock or the spinnable slab
               into this same box. */}
           <div className="landing-stage relative">
+            <HeroOrb />
             <DashboardSlab />
             <FloatingChips />
           </div>

@@ -339,6 +339,18 @@
   50%      { transform: translate3d(0, -9px, 0); }
 }
 
+/* ── The background orb ──────────────────────────────────────────
+   A WebGL canvas sitting behind the slab, mounted by HeroOrb. Bleeds well past
+   the card so the halo has somewhere to go; the hero section clips it, so the
+   overhang costs nothing. Never takes a pointer — the slab owns interaction. */
+
+.landing-orb-layer {
+  position: absolute;
+  z-index: 0;
+  inset: -26%;
+  pointer-events: none;
+}
+
 /* ── Tier-2: the spinnable dashboard slab ────────────────────────────
    CSS 3D, deliberately not WebGL. An earlier pass baked the dashboard into a
    texture and mapped it onto a three.js slab; the type went soft, because a
@@ -351,6 +363,9 @@
 
 .landing-slab {
   position: relative;
+  /* Explicit rung on .landing-stage's ladder: orb 0, slab 1, chips 3. Sibling
+     order alone is what let the chips end up behind this once already. */
+  z-index: 1;
   /* Seals the slab's internal layering in. Without a stacking context here the
      scene's and the shade's z-indexes resolve against .landing-stage and
      compete with everything else in it — which is exactly how the scene ended

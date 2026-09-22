@@ -31,6 +31,10 @@ export default defineConfig({
           vendor: ['react', 'react-dom', 'react-router-dom'],
           charts: ['recharts'],
           graph: ['react-force-graph-2d'],
+          // three is only reachable through the hero orb's lazy chunk, so this
+          // stays a dynamic chunk — split out purely so it caches on its own
+          // and does not swamp the size report for the R3F glue.
+          three: ['three'],
         },
       },
     },
