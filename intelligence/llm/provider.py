@@ -25,11 +25,42 @@ _PROVIDER_DEFAULTS = {
 }
 
 
+class LLMNotConfigured(RuntimeError):
+    """No API key for the selected provider.
+
+    Raised by `complete()` instead of letting the provider SDK fail deep in its
+    HTTP layer — an empty key produces `Illegal header value b'Bearer '` from
+    httpx, which is opaque and surfaces as a 500. Callers that can degrade
+    (quiz generation, categorization) swallow it; callers that cannot turn it
+    into a clean, actionable response.
+    """
+
+
+# Which env var holds the key for each provider. Ollama runs locally and needs
+# no key, so it is absent here and always counts as configured.
+_PROVIDER_KEY_ENV = {
+    "groq": "GROQ_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+}
+
+
 class LLMService:
     def __init__(self):
         self.provider = os.getenv("LLM_PROVIDER", "groq").lower()
         self.model = os.getenv("LLM_MODEL", _PROVIDER_DEFAULTS.get(self.provider, "llama-3.3-70b-versatile"))
         self._client = self._build_client()
+
+    def is_configured(self) -> bool:
+        """True when this provider has the credentials it needs to be called.
+
+        Read live rather than cached at construction so a key added to the
+        environment is picked up without recreating the module-level singleton.
+        """
+        key_env = _PROVIDER_KEY_ENV.get(self.provider)
+        if key_env is None:
+            return True  # ollama / any keyless local provider
+        return bool(os.getenv(key_env, "").strip())
 
     def _build_client(self):
         if self.provider == "groq":
@@ -54,7 +85,16 @@ class LLMService:
         """
         Single unified text completion.
         Always returns the raw string from the model — callers parse JSON themselves.
+
+        Raises LLMNotConfigured when the provider has no API key, so the failure
+        is named at the point it is knowable instead of inside the SDK.
         """
+        if not self.is_configured():
+            raise LLMNotConfigured(
+                f"No API key for LLM_PROVIDER={self.provider}. "
+                f"Set {_PROVIDER_KEY_ENV[self.provider]} to enable LLM features."
+            )
+
         if self.provider in ("groq", "ollama"):
             messages = []
             if system:

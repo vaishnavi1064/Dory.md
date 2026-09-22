@@ -1,7 +1,7 @@
 """LLM orchestration: provider abstraction, categorization, quiz generation."""
 
 from intelligence.llm.categorization import CATEGORIES, classify
-from intelligence.llm.provider import LLMService, get_llm
+from intelligence.llm.provider import LLMNotConfigured, LLMService, get_llm
 from intelligence.llm.quiz_generation import (
     FALLBACK_QUESTIONS,
     MCQ_SYSTEM,
@@ -12,6 +12,7 @@ from intelligence.llm.quiz_generation import (
 __all__ = [
     "get_llm",
     "LLMService",
+    "LLMNotConfigured",
     "classify",
     "CATEGORIES",
     "generate_mcq",
