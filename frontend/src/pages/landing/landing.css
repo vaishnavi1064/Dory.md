@@ -1,0 +1,345 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Landing-page styling.
+
+   Plain CSS on purpose (no @apply / @layer): it is imported from
+   LandingPage.tsx, so it only ships with the marketing page and cannot reorder
+   the app's Tailwind layers. Layout still uses Tailwind utilities in the JSX —
+   this file holds the token set plus the bits Tailwind has no vocabulary for
+   (the orb, the 3D tilt, the hand-drawn annotation, the masked reveal).
+
+   Colour rule, same as the rest of the app: everything resolves through tokens.
+   The page has a deliberate dark -> light -> dark rhythm, so there are two
+   families:
+
+     --landing-deep-*  the near-black bands (nav, hero, final CTA, footer).
+                       Dark in BOTH themes, like --hero and the --graph-*
+                       tokens, because that IS the brand surface. Not
+                       overridden in .dark, only deepened slightly so the bands
+                       still read as distinct from a dark page.
+
+     --landing-soft-*  the mid sections. These DO follow the theme: warm
+                       off-white in light, app-surface dark in dark mode.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Dark bands — pinned across themes. */
+  --landing-deep: oklch(0.16 0.035 285);
+  --landing-deep-2: oklch(0.20 0.042 287);
+  --landing-deep-fg: oklch(0.97 0.006 285);
+  --landing-deep-muted: oklch(0.76 0.018 285);
+  --landing-deep-subtle: oklch(0.62 0.02 285);
+  --landing-deep-border: oklch(1 0 0 / 0.10);
+  --landing-deep-card: oklch(1 0 0 / 0.045);
+  --landing-deep-card-2: oklch(1 0 0 / 0.07);
+
+  /* The lavender haze that sits behind the hero and the final CTA. */
+  --landing-haze-1: oklch(0.62 0.20 292 / 0.34);
+  --landing-haze-2: oklch(0.55 0.17 315 / 0.20);
+
+  /* Mid sections — theme-following. */
+  --landing-soft: oklch(0.978 0.008 78);
+  --landing-soft-2: oklch(1 0 0);
+  --landing-soft-border: var(--border);
+}
+
+.dark {
+  /* Deepen the bands so they stay separable from the dark page around them. */
+  --landing-deep: oklch(0.135 0.03 285);
+  --landing-deep-2: oklch(0.175 0.038 287);
+
+  --landing-soft: oklch(0.185 0.013 285);
+  --landing-soft-2: oklch(0.215 0.015 285);
+}
+
+/* ── Bands ───────────────────────────────────────────────────────────────── */
+
+.landing-root {
+  background: var(--landing-soft);
+  color: var(--text-1);
+  overflow-x: clip;
+}
+
+.landing-band-dark {
+  position: relative;
+  background: var(--landing-deep);
+  color: var(--landing-deep-fg);
+  isolation: isolate;
+}
+
+.landing-band-soft {
+  position: relative;
+  background: var(--landing-soft);
+  color: var(--text-1);
+}
+
+/* Type on a dark band has to come off the pinned scale, not --text-*, which
+   inverts with the theme and would go near-black on near-black. */
+.landing-band-dark .landing-muted { color: var(--landing-deep-muted); }
+.landing-band-dark .landing-subtle { color: var(--landing-deep-subtle); }
+.landing-band-soft .landing-muted { color: var(--text-2); }
+.landing-band-soft .landing-subtle { color: var(--text-3); }
+
+.landing-shell {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 1200px;
+  padding-inline: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .landing-shell { padding-inline: 2rem; }
+}
+
+/* ── Type ────────────────────────────────────────────────────────────────── */
+
+/* The mockup's headline is a high-contrast serif. Manrope is the app face, so
+   the display scale borrows a serif stack for headlines only — the rest of the
+   page stays on the app's sans. */
+.landing-display {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia,
+    'Times New Roman', serif;
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  line-height: 1.04;
+  text-wrap: balance;
+}
+
+.landing-h1 { font-size: clamp(2.6rem, 7.4vw, 4.6rem); }
+.landing-h2 { font-size: clamp(2rem, 4.6vw, 3.1rem); }
+.landing-h3 { font-size: clamp(1.35rem, 2.4vw, 1.75rem); }
+
+.landing-lede {
+  font-size: clamp(1rem, 1.35vw, 1.12rem);
+  line-height: 1.62;
+  max-width: 34rem;
+}
+
+.landing-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: oklch(var(--lavender) / 0.95);
+}
+
+.landing-accent { color: oklch(var(--lavender)); }
+
+/* ── Pills, chips, buttons ───────────────────────────────────────────────── */
+
+.landing-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.34rem 0.8rem;
+  border: 1px solid var(--landing-deep-border);
+  border-radius: 999px;
+  background: var(--landing-deep-card);
+  color: var(--landing-deep-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.landing-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.85rem;
+  padding: 0.75rem 1.35rem;
+  border-radius: 10px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid transparent;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.landing-cta-filled {
+  background: oklch(var(--lavender));
+  color: oklch(0.18 0.03 285);
+  box-shadow: 0 10px 30px oklch(var(--lavender) / 0.28);
+}
+
+.landing-cta-filled:hover {
+  background: oklch(0.87 0.10 290);
+  transform: translateY(-1px);
+}
+
+.landing-cta-ghost {
+  background: transparent;
+  border-color: var(--landing-deep-border);
+  color: var(--landing-deep-fg);
+}
+
+.landing-cta-ghost:hover {
+  background: var(--landing-deep-card-2);
+  border-color: oklch(var(--lavender) / 0.45);
+}
+
+/* On a soft band the ghost button needs the theme's own border/ink. */
+.landing-band-soft .landing-cta-ghost {
+  border-color: var(--border-strong);
+  color: var(--text-1);
+}
+
+.landing-band-soft .landing-cta-ghost:hover {
+  background: var(--surface-2);
+  border-color: oklch(var(--lavender) / 0.5);
+}
+
+.landing-cta:focus-visible,
+.landing-navlink:focus-visible {
+  outline: 2px solid oklch(var(--lavender));
+  outline-offset: 2px;
+}
+
+.landing-navlink {
+  color: var(--landing-deep-muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: 6px;
+  transition: color 160ms ease;
+}
+
+.landing-navlink:hover { color: var(--landing-deep-fg); }
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+
+.landing-card {
+  background: var(--landing-soft-2);
+  border: 1px solid var(--landing-soft-border);
+  border-radius: 14px;
+  box-shadow: 0 1px 0 var(--card-highlight);
+}
+
+.landing-card-dark {
+  background: var(--landing-deep-2);
+  border: 1px solid var(--landing-deep-border);
+  border-radius: 14px;
+  color: var(--landing-deep-fg);
+}
+
+/* ── The glowing orb ─────────────────────────────────────────────────────────
+   Tier 1 is a pure-CSS radial blob. GlowOrb.tsx is the swap point for the
+   Tier-2 WebGL version — keep the same box so the layout does not move. */
+
+.landing-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 38% 34%,
+    var(--landing-haze-1) 0%,
+    var(--landing-haze-2) 42%,
+    transparent 70%
+  );
+  filter: blur(46px);
+  will-change: transform, opacity;
+  animation: landing-orb-drift 13s ease-in-out infinite;
+}
+
+@keyframes landing-orb-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.92; }
+  50%      { transform: translate3d(0, -22px, 0) scale(1.06); opacity: 1; }
+}
+
+/* A second, slower pass gives the haze some internal movement. */
+.landing-orb-slow { animation-duration: 21s; animation-direction: reverse; }
+
+/* ── Dashboard mock: 3D tilt ─────────────────────────────────────────────────
+   DashboardMock.tsx is the other Tier-2 swap point. The perspective lives on
+   the wrapper so a WebGL canvas can drop into the same slot. */
+
+.landing-stage {
+  perspective: 1600px;
+  perspective-origin: 62% 42%;
+}
+
+.landing-tilt {
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.landing-mock {
+  border-radius: 16px;
+  border: 1px solid oklch(1 0 0 / 0.12);
+  background: var(--landing-deep-2);
+  box-shadow:
+    0 40px 90px oklch(0.12 0.03 285 / 0.55),
+    0 0 0 1px oklch(1 0 0 / 0.04) inset;
+  overflow: hidden;
+}
+
+/* Inside the mock everything is pinned dark regardless of theme: it is a
+   picture of the product, not a themed surface. */
+.landing-mock-row {
+  border: 1px solid oklch(1 0 0 / 0.08);
+  background: oklch(1 0 0 / 0.04);
+  border-radius: 10px;
+}
+
+.landing-mock-chip {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid oklch(1 0 0 / 0.14);
+  background: oklch(0.22 0.04 287 / 0.86);
+  backdrop-filter: blur(8px);
+  color: var(--landing-deep-fg);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 12px 30px oklch(0.12 0.03 285 / 0.4);
+  animation: landing-chip-drift 7s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes landing-chip-drift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, -9px, 0); }
+}
+
+/* ── Hand-drawn annotations (desktop only) ───────────────────────────────── */
+
+.landing-annotation {
+  display: none;
+  font-family: 'Segoe Script', 'Bradley Hand', 'Brush Script MT', cursive;
+  font-size: 1.05rem;
+  line-height: 1.3;
+  color: oklch(var(--lavender) / 0.9);
+  pointer-events: none;
+}
+
+@media (min-width: 1280px) {
+  .landing-annotation { display: block; }
+}
+
+/* ── Masked headline reveal ──────────────────────────────────────────────── */
+
+.landing-reveal-line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.08em;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────────────
+   Framer Motion is handled in motion.ts via useReducedMotion(); these are the
+   CSS-driven loops it cannot see. Continuous motion stops entirely — the orb
+   and chips just sit still. */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  .landing-orb,
+  .landing-mock-chip {
+    animation: none !important;
+  }
+
+  .landing-tilt {
+    transform: none !important;
+  }
+}
