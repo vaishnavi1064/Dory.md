@@ -18,6 +18,7 @@ from database.db import (
     insert_chunk,
 )
 from intelligence.memory import calculate_retention, classify_retention
+from routers import seed as seed_router
 from routers._shared import retention_anchor
 
 from tests.test_graph_edges import _user_id_from
@@ -66,6 +67,30 @@ def auth(token):
 
 def seed(client, token):
     return client.post("/api/seed", headers=auth(token))
+
+
+def graph_components(graph: dict) -> list[set[str]]:
+    """Connected components of a GET /api/graph response, largest first."""
+    adjacency: dict[str, set[str]] = {node["id"]: set() for node in graph["nodes"]}
+    for edge in graph["edges"]:
+        adjacency[edge["source"]].add(edge["target"])
+        adjacency[edge["target"]].add(edge["source"])
+
+    seen: set[str] = set()
+    components: list[set[str]] = []
+    for start in adjacency:
+        if start in seen:
+            continue
+        stack, component = [start], set()
+        while stack:
+            node = stack.pop()
+            if node in component:
+                continue
+            component.add(node)
+            stack.extend(n for n in adjacency[node] if n not in component)
+        seen |= component
+        components.append(component)
+    return sorted(components, key=len, reverse=True)
 
 
 def live_buckets(user_id: str) -> Counter:
@@ -190,18 +215,64 @@ def test_reseeding_never_touches_non_demo_notes(client, register_user):
 
 
 # -- Connectivity -------------------------------------------------------------
+#
+# The graph this module can check is the one the `fake_embeddings` fixture above
+# produces: orthogonal per-file clusters. That is a fair test of the edge
+# *builder* (does it link everything it should, and nothing it should not) but it
+# says nothing about DEMO_EDGE_THRESHOLD, because the synthetic within-cluster
+# similarity is ~1.0 and clears any plausible threshold.
+#
+# Connectivity of the real demo graph — the thing that actually broke — is
+# checked against real MiniLM vectors in test_seed_graph_real_embeddings.py.
+# This file keeps the structural half plus a tripwire on the tuned constant.
 
-def test_seed_produces_a_connected_graph(client, register_user):
+
+def test_seed_links_every_note_that_has_a_same_file_neighbour(client, register_user):
+    """Component structure must match the embedding structure exactly.
+
+    With one orthogonal cluster per source file, the correct graph has exactly
+    one component per source file and no cross-file edges. A note is isolated
+    only when it is the sole note in its file and therefore has nothing to link
+    to. Asserting the whole partition (rather than a fraction of linked nodes)
+    is what makes this fail if the edge builder, the neighbour cap or the
+    per-user scoping regresses.
+    """
     _, token = register_user()
+    uid = _user_id_from(token)
     body = seed(client, token).json()
-
     assert body["edges_total"] > 0
 
-    graph = client.get("/api/graph?limit=300", headers=auth(token)).json()
-    linked = {n["id"] for n in graph["nodes"] if n["degree"] > 0}
-    # A scatter of isolated points is not a constellation.
-    assert len(linked) >= 0.25 * len(graph["nodes"]), (
-        f"only {len(linked)}/{len(graph['nodes'])} nodes have a link"
+    graph = client.get("/api/graph?limit=2000", headers=auth(token)).json()
+    components = graph_components(graph)
+
+    source_of = {row["id"]: row["source_file"] for row in get_all_chunks(uid)}
+    expected: dict[str, set[str]] = {}
+    for cid, source in source_of.items():
+        expected.setdefault(source, set()).add(cid)
+
+    assert sorted(len(c) for c in components) == sorted(len(c) for c in expected.values())
+    assert {frozenset(c) for c in components} == {frozenset(c) for c in expected.values()}, (
+        "components do not line up one-to-one with source files"
+    )
+
+    isolated = {n["id"] for n in graph["nodes"] if n["degree"] == 0}
+    alone = {cid for source, ids in expected.items() if len(ids) == 1 for cid in ids}
+    assert isolated == alone, (
+        f"{len(isolated)} isolated notes but {len(alone)} single-note files"
+    )
+
+
+def test_demo_edge_threshold_is_the_value_its_connectivity_was_measured_at():
+    """Tripwire on a tuned constant.
+
+    DEMO_EDGE_THRESHOLD was chosen by measuring component structure over the real
+    corpus at a range of values (the table in seed.py). Nothing in a torch-free
+    CI run can re-derive that, so changing the constant must be a deliberate act
+    that comes with a fresh measurement — this test is what forces it.
+    """
+    assert seed_router.DEMO_EDGE_THRESHOLD == 0.22, (
+        "DEMO_EDGE_THRESHOLD changed. Re-measure connectivity over the real "
+        "corpus, update the table in seed.py, then update this test."
     )
 
 
