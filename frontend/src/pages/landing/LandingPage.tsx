@@ -7,6 +7,7 @@ import { Hero } from './sections/Hero';
 import { ProblemSection } from './sections/ProblemSection';
 import { TimeMachineSection } from './sections/TimeMachineSection';
 import { TopNav } from './sections/TopNav';
+import { useScrollEngine } from './scroll/useScrollEngine';
 import './landing.css';
 
 /** Public marketing page at `/`.
@@ -31,6 +32,11 @@ export function LandingPage() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  // Smooth scrolling and everything tied to scroll position. Lazy, gated to
+  // desktop widths with motion allowed, and additive — the page below is
+  // exactly what renders without it.
+  useScrollEngine();
 
   return (
     <div className="landing-root">

@@ -642,6 +642,22 @@
   color: var(--landing-deep-subtle);
 }
 
+/* ── Smooth scroll ─────────────────────────────────────────────────
+   Lenis marks <html> while it is running. It animates the real window scroll
+   rather than transforming a wrapper — which is why the sticky nav still works
+   — but that also means the browser's own smooth-scroll would be a second
+   animator on the same value, so it has to stand down. styles.css sets
+   scroll-behavior: smooth globally; this is narrower, so it wins. */
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+html.lenis {
+  scroll-behavior: auto;
+}
+
 /* ── Hand-drawn annotations (desktop only) ───────────────────────────────── */
 
 .landing-annotation {

@@ -4,6 +4,7 @@ import { Bloom, EffectComposer } from '@react-three/postprocessing';
 import { useReducedMotion } from 'framer-motion';
 import { Color, type Mesh } from 'three';
 import { THEME_CHANGED_EVENT } from '@/lib/themeMode';
+import { scrollSignals } from '../../scroll/signals';
 import { cssColorHex, LAVENDER_FALLBACK } from './orbGate';
 
 /**
@@ -43,6 +44,18 @@ const BREATHE_RATE = (Math.PI * 2) / 8;
 const BREATHE_SCALE = 0.02;
 const EMISSIVE_LOW = 0.8;
 const EMISSIVE_HIGH = 1;
+
+/* ── the scroll hand-over ──────────────────────────────────────────────────
+   Driven by scrollSignals.heroExit, which the hero's ScrollTrigger scrubs from
+   0 to 1 as the Problem section takes over. Both rest at zero effect, so every
+   path where the scroll engine does not run — narrow screens, reduced motion,
+   a chunk that never loaded — keeps the orb exactly as it was. */
+
+/** How much of the light is gone by the time the hero has handed over. Not all
+ *  of it: this is a memory fading, not a switch. */
+const EXIT_DIM = 0.85;
+/** And how far it draws in as it goes. */
+const EXIT_CONTRACT = 0.22;
 
 const VERTEX = /* glsl */ `
   varying vec3 vNormal;
@@ -94,16 +107,23 @@ function Orb({ color, reduced }: { color: string; reduced: boolean }) {
     const m = mesh.current;
     if (!m) return;
 
+    // Reading a plain number off a module object, every frame, allocating
+    // nothing. Zero unless the scroll engine is running.
+    const exit = scrollSignals.heroExit;
+    const decay = 1 - EXIT_DIM * exit;
+    const shrink = 1 - EXIT_CONTRACT * exit;
+
     if (reduced) {
-      m.scale.setScalar(1);
-      uniforms.uIntensity.value = EMISSIVE_HIGH;
+      m.scale.setScalar(shrink);
+      uniforms.uIntensity.value = EMISSIVE_HIGH * decay;
       return;
     }
 
     // 0..1 and back, once per breath. No allocation: setScalar mutates.
     const k = 0.5 + 0.5 * Math.sin(state.clock.elapsedTime * BREATHE_RATE);
-    m.scale.setScalar(1 + BREATHE_SCALE * k);
-    uniforms.uIntensity.value = EMISSIVE_LOW + (EMISSIVE_HIGH - EMISSIVE_LOW) * k;
+    m.scale.setScalar((1 + BREATHE_SCALE * k) * shrink);
+    uniforms.uIntensity.value =
+      (EMISSIVE_LOW + (EMISSIVE_HIGH - EMISSIVE_LOW) * k) * decay;
   });
 
   return (
