@@ -344,12 +344,42 @@
    the card so the halo has somewhere to go; the hero section clips it, so the
    overhang costs nothing. Never takes a pointer — the slab owns interaction. */
 
-.landing-orb-layer {
+/* ── The glow behind the dashboard ──────────────────────────────────────
+   Was a WebGL sphere with a bloom pass and a breathing loop. It is now two
+   radial gradients, which look the same sitting still and cannot get stuck
+   holding a stale pose, lose a GPU context or hold a frame loop open.
+
+   It keeps the canvas layer's exact box, because that box is also the particle
+   beat's emitter: components/particles/anchors.ts reads this element's rect for
+   the source the light flies from. Move or rename it and the beat follows —
+   which is the point, but it is a real coupling.
+
+   Behind the slab (z-index 0 against the slab's 1) and never in a pointer's
+   way. Both gradients resolve through --lavender, so it follows the theme. */
+
+.landing-slab-glow {
   position: absolute;
   z-index: 0;
   inset: -26%;
   pointer-events: none;
+  background:
+    /* the core, roughly where the sphere itself was */
+    radial-gradient(
+      closest-side circle at 50% 48%,
+      oklch(var(--lavender) / 0.30) 0%,
+      oklch(var(--lavender) / 0.12) 42%,
+      transparent 68%
+    ),
+    /* and the wide wash the bloom used to throw */
+    radial-gradient(
+      closest-side circle at 50% 50%,
+      oklch(var(--lavender) / 0.20) 0%,
+      oklch(var(--lavender) / 0.07) 54%,
+      transparent 100%
+    );
+  filter: blur(30px);
 }
+
 
 /* ── Tier-2: the spinnable dashboard slab ────────────────────────────
    CSS 3D, deliberately not WebGL. An earlier pass baked the dashboard into a

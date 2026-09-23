@@ -6,11 +6,12 @@ import { PARTICLE_TRAVEL as TRAVEL } from '../../scroll/choreography';
 import { scrollSignals } from '../../scroll/signals';
 import { sampleCurve } from '../curveGeometry';
 import { WakeOnSignals } from '../WakeOnSignals';
-import { cssColorHex, LAVENDER_FALLBACK } from '../orb/orbGate';
+import { cssColorHex, LAVENDER_FALLBACK } from '../../webgl';
 import { createAnchorFrame, readAnchors, toScreenX, toScreenY } from './anchors';
 
 /**
- * The light leaving the orb and coming to rest along the forgetting curve.
+ * The light leaving the hero glow and coming to rest along the forgetting
+ * curve.
  *
  * A fixed, full-viewport canvas with an orthographic camera at zoom 1, so one
  * world unit is one CSS pixel and the canvas box is the viewport. That is what
@@ -201,9 +202,9 @@ function Field({ color, onDark }: { color: string; onDark: boolean }) {
       s.positions[o + 1] = halfH - py;
       s.positions[o + 2] = 0;
 
-      // Invisible at the orb (it is behind the slab, and light should not pop
-      // out in front of the card), full through the flight, dimmed once it has
-      // become part of the chart.
+      // Invisible at the source (the glow is behind the slab, and light should
+      // not pop out in front of the card), full through the flight, dimmed once
+      // it has become part of the chart.
       const fadeIn = t < 0.18 ? t / 0.18 : 1;
       const settle = t > 0.82 ? (t - 0.82) / 0.18 : 0;
       s.alphas[i] = fadeIn * (1 - (1 - SETTLED_ALPHA) * settle);

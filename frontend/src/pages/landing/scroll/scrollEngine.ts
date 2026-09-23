@@ -98,7 +98,7 @@ export function startScrollEngine(): () => void {
 
     // ── the page's timelines ────────────────────────────────────────────────
     // In story order. Their spans overlap on purpose — the light starts
-    // leaving the orb while the orb is still fading.
+    // leaving while the hero is still on screen.
     buildHeroExit();
     buildCurveSeed();
 

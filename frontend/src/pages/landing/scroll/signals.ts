@@ -2,9 +2,9 @@
  * Scroll-linked values: written by ScrollTrigger, read inside render loops.
  *
  * A plain mutable object on purpose. These change every frame while the user
- * scrolls, and the things that read them (the orb's WebGL frame loop today,
- * more later) are not React renders — routing this through state would
- * re-render the hero sixty times a second to move a number.
+ * scrolls, and the things that read them (the particle field today, more
+ * later) are not React renders — routing this through state would re-render
+ * the hero sixty times a second to move a number.
  *
  * The contract for later bites: every signal is a plain number that means
  * something on its own, rests at its neutral value, and is safe to read when
@@ -18,6 +18,10 @@ export interface ScrollSignals {
    * 0 while the hero owns the screen, 1 once it has scrolled away. Stays 0 on
    * narrow screens and under reduced motion, where the engine never runs, so
    * readers get the old static behaviour for free.
+   *
+   * No reader at the moment: the WebGL orb that dimmed on it has been replaced
+   * by a static gradient. Kept because it is the page's measure of the
+   * hand-over and the next bite needs it.
    */
   heroExit: number;
 
@@ -26,8 +30,8 @@ export interface ScrollSignals {
    *
    * 0 before any of it has left, 1 once the particles have come to rest along
    * the curve and the chart has finished drawing. Deliberately a separate span
-   * from heroExit and overlapping it: the light starts leaving while the orb is
-   * still fading, which is the point of the beat.
+   * from heroExit and overlapping it: the light starts leaving while the hero
+   * is still on screen, which is the point of the beat.
    */
   curveSeed: number;
 }

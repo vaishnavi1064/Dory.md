@@ -4,23 +4,23 @@ import { scrollSignals } from './signals';
 /**
  * Bite 1 of the scroll story: the hero handing over to the Problem section.
  *
- * The beat is "memory beginning to decay" — the orb's light fades and draws in
- * as the dashboard slides away. Everything here is scrubbed, so it is a
- * position on the page rather than an animation that plays: scroll back up and
- * the light comes back.
+ * The beat is "memory beginning to decay": the dashboard drifts back and fades
+ * as the Problem section takes over. Scrubbed, so it is a position on the page
+ * rather than an animation that plays — scroll back up and it returns.
  *
- * Nothing in this file touches the orb or the slab directly. It moves one
- * number (scrollSignals.heroExit) that the orb's own frame loop reads, and one
- * wrapper element that nothing else writes to. That is deliberate — the slab's
- * rotor transform is rewritten every frame by useSlabSpin, and a second writer
- * would fight it.
+ * It moves one wrapper element that nothing else writes to, and one number.
+ * The element matters: the slab's rotor transform is rewritten every frame by
+ * useSlabSpin, and its outer box belongs to Framer, so a second writer on
+ * either would fight. The number (scrollSignals.heroExit) has no reader right
+ * now — the WebGL orb that dimmed on it is gone — but it is the documented
+ * measure of how far the hero has handed over, and the scroll-morph bite wants
+ * exactly that.
  */
 
 /**
  * The hand-over runs from the hero sitting flush at the top until 70% of it has
- * scrolled past. Ending before the hero is fully gone matters: the orb's frame
- * loop stops once it leaves the viewport, so anything still animating past that
- * point would simply freeze mid-fade.
+ * scrolled past — finishing while the card is still on screen, so the recede is
+ * something you watch rather than something that completes out of sight.
  */
 const START = 'top top';
 const END = '70% top';
@@ -50,8 +50,8 @@ export function buildHeroExit() {
     scrollTrigger: { trigger: hero, start: START, end: END, scrub: SCRUB },
   });
 
-  // The orb's light failing. The orb reads this every frame and turns it into
-  // emissive intensity and scale; see EXIT_DIM / EXIT_CONTRACT in OrbCanvas.
+  // How far the hero has handed over, for anything that wants to know. See the
+  // note above: currently written but unread.
   timeline.to(scrollSignals, { heroExit: 1, ease: 'none' }, 0);
 
   // The slab receding. Applied to the scene wrapper rather than the slab

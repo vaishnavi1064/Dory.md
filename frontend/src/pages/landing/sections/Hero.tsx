@@ -5,7 +5,6 @@ import { Annotation } from '../components/Annotation';
 import { DashboardSlab } from '../components/DashboardSlab';
 import { FloatingChips } from '../components/FloatingChips';
 import { GlowOrb } from '../components/GlowOrb';
-import { HeroOrb } from '../components/orb/HeroOrb';
 import { maskedLineChild, maskedLineParent, riseIn, useMotionPolicy } from '../motion';
 
 const HEADLINE = ['Remember what', 'matters.'];
@@ -128,7 +127,10 @@ export function Hero() {
               DashboardSlab serves either the flat mock or the spinnable slab
               into this same box. */}
           <div className="landing-stage relative">
-            <HeroOrb />
+            {/* The glow behind the card. A plain gradient — and the point the
+                particle beat emits from, which is why it keeps a stable class
+                rather than being folded into DashboardSlab (see particles/anchors). */}
+            <div className="landing-slab-glow" aria-hidden />
             <DashboardSlab />
             <FloatingChips />
           </div>

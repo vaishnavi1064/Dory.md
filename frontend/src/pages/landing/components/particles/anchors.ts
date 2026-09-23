@@ -21,7 +21,7 @@ export interface Anchor {
 
 /** Filled in place every frame. Module-level so the loop allocates nothing. */
 export interface AnchorFrame {
-  /** Centre of the orb, where the light comes from. */
+  /** Centre of the hero glow, where the light comes from. */
   source: Anchor;
   /** Maps a point in the curve's viewBox onto the screen. */
   scale: number;
@@ -32,7 +32,7 @@ export interface AnchorFrame {
   /** Cached nodes. Re-found only when React has replaced them, so the common
    *  frame costs two rect reads and no selector matching. */
   svg: Element | null;
-  orb: Element | null;
+  glow: Element | null;
 }
 
 export function createAnchorFrame(): AnchorFrame {
@@ -43,7 +43,7 @@ export function createAnchorFrame(): AnchorFrame {
     originY: 0,
     ready: false,
     svg: null,
-    orb: null,
+    glow: null,
   };
 }
 
@@ -52,32 +52,32 @@ const live = (node: Element | null) => (node?.isConnected ? node : null);
 /**
  * Re-reads both ends into `out`. Returns it for convenience; allocates nothing.
  *
- * The source prefers the orb's own layer and falls back to the slab, so the
- * light still comes from the right place on a machine where the orb never
- * mounted.
+ * The source is the hero's glow — the gradient behind the dashboard — with the
+ * slab itself as a fallback. They share a centre, so the light comes from the
+ * same place either way.
  */
 export function readAnchors(out: AnchorFrame): AnchorFrame {
   const svg = (out.svg = live(out.svg) ?? document.querySelector(`[${CURVE_HOOK.svg}]`));
-  const orb = (out.orb =
-    live(out.orb) ??
-    document.querySelector('.landing-orb-layer') ??
+  const glow = (out.glow =
+    live(out.glow) ??
+    document.querySelector('.landing-slab-glow') ??
     document.querySelector('.landing-slab'));
 
-  if (!svg || !orb) {
+  if (!svg || !glow) {
     out.ready = false;
     return out;
   }
 
   const curveRect = svg.getBoundingClientRect();
-  const orbRect = orb.getBoundingClientRect();
+  const glowRect = glow.getBoundingClientRect();
 
-  if (!curveRect.width || !orbRect.width) {
+  if (!curveRect.width || !glowRect.width) {
     out.ready = false;
     return out;
   }
 
-  out.source.x = orbRect.left + orbRect.width / 2;
-  out.source.y = orbRect.top + orbRect.height / 2;
+  out.source.x = glowRect.left + glowRect.width / 2;
+  out.source.y = glowRect.top + glowRect.height / 2;
 
   // The SVG keeps its aspect (viewBox + h-auto w-full, default
   // preserveAspectRatio), so one scalar maps both axes.

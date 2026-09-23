@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
  * The one width above which the landing page turns its enhancements on.
  *
  * There is a single number here on purpose. This started as three: the slab
- * gated at 768, the orb and the scroll engine at 1024 — and everything above
- * 1024 silently did nothing on perfectly ordinary desktops, because a viewport
+ * gated at 768, the hero canvases and the scroll engine at 1024 — and anything
+ * above 1024 silently did nothing on ordinary desktops, because a viewport
  * is measured in CSS pixels, not hardware ones. A 1440px window at 150% browser
  * zoom reports 960. A 1366px laptop at Windows' 150% display scaling reports
  * 910. Both fall through every 1024 gate while looking, to the person sitting
@@ -21,10 +21,10 @@ export const ENHANCED_MIN_WIDTH_PX = 768;
 export const ENHANCED_WIDTH_QUERY = `(min-width: ${ENHANCED_MIN_WIDTH_PX}px)`;
 
 /**
- * Whether this viewport gets the enhanced hero — the spinnable slab, the orb,
- * and the scroll-linked motion. Re-evaluates on resize, so dragging a window
- * wider or zooming back out brings everything in rather than leaving the page
- * half-built until a reload.
+ * Whether this viewport gets the enhanced hero — the spinnable slab, the
+ * particle field and the scroll-linked motion. Re-evaluates on resize, so
+ * dragging a window wider or zooming back out brings everything in rather than
+ * leaving the page half-built until a reload.
  */
 export function useEnhancedViewport(): boolean {
   const [wide, setWide] = useState(() => window.matchMedia(ENHANCED_WIDTH_QUERY).matches);

@@ -4,7 +4,8 @@ import { PARTICLE_TRAVEL } from './choreography';
 import { scrollSignals } from './signals';
 
 /**
- * Bite 2: the hero's light leaving the orb and becoming the forgetting curve.
+ * Bite 2: the hero's light leaving the glow behind the dashboard and becoming
+ * the forgetting curve.
  *
  * One timeline drives both halves, which is the whole trick — the particles and
  * the chart are not two animations that happen to overlap, they are the same
@@ -12,8 +13,8 @@ import { scrollSignals } from './signals';
  * scrollSignals.curveSeed; the SVG is animated here directly.
  *
  * The span deliberately overlaps heroExit's: the light starts leaving while the
- * orb is still fading, so it reads as the orb losing it rather than something
- * new arriving.
+ * hero is still on screen, so it reads as the hero losing it rather than as
+ * something new arriving.
  */
 
 /** Starts partway through the hero's own exit — see the overlap above. */

@@ -1,11 +1,10 @@
-import { useEnhancedViewport } from '../../viewport';
-
 /**
- * Who gets the WebGL orb, and what colour it is.
+ * The two things every WebGL surface on this page needs before it can start:
+ * whether there is a context to be had, and what the brand colour actually is
+ * in a form a shader can use.
  *
- * Free of any `three` import on purpose: HeroOrb is in the eager landing
- * bundle and has to be able to decide *not* to load the canvas. Everything
- * WebGL lives behind the lazy ./OrbCanvas chunk.
+ * Free of any `three` import on purpose. The components that call these are in
+ * the eager landing bundle and use them to decide *not* to load a canvas.
  */
 
 let webglCache: boolean | null = null;
@@ -26,12 +25,6 @@ export function hasWebGL(): boolean {
     webglCache = false;
   }
   return webglCache;
-}
-
-/** Whether to mount the orb at all. The width half is the page-wide gate; the
- *  orb only adds the requirement that WebGL actually exists. */
-export function useOrbEnabled(): boolean {
-  return useEnhancedViewport() && hasWebGL();
 }
 
 /** Literal fallback: the sRGB rendering of the light theme's --lavender. */
