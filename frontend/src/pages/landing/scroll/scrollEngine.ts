@@ -2,6 +2,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 import { ENHANCED_WIDTH_QUERY } from '../viewport';
+import { buildCurveSeed } from './curveSeed';
 import { buildHeroExit } from './heroExit';
 import { resetScrollSignals } from './signals';
 
@@ -91,7 +92,10 @@ export function startScrollEngine(): () => void {
     gsap.ticker.lagSmoothing(0);
 
     // ── the page's timelines ────────────────────────────────────────────────
+    // In story order. Their spans overlap on purpose — the light starts
+    // leaving the orb while the orb is still fading.
     buildHeroExit();
+    buildCurveSeed();
 
     // Web fonts land after first paint and change how tall sections are, which
     // moves every trigger's start and end. Measure again once they are in.

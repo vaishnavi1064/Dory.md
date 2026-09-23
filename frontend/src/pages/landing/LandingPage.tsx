@@ -6,6 +6,7 @@ import { Footer } from './sections/Footer';
 import { Hero } from './sections/Hero';
 import { ProblemSection } from './sections/ProblemSection';
 import { TimeMachineSection } from './sections/TimeMachineSection';
+import { MemoryParticles } from './components/particles/MemoryParticles';
 import { TopNav } from './sections/TopNav';
 import { useScrollEngine } from './scroll/useScrollEngine';
 import './landing.css';
@@ -50,6 +51,10 @@ export function LandingPage() {
         <FinalCta />
       </main>
       <Footer />
+
+      {/* A fixed, full-viewport layer. Lives at the root because the beat it
+          draws crosses two sections. */}
+      <MemoryParticles />
     </div>
   );
 }

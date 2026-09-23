@@ -20,9 +20,19 @@ export interface ScrollSignals {
    * readers get the old static behaviour for free.
    */
   heroExit: number;
+
+  /**
+   * How far the hero's light has been carried down into the forgetting curve.
+   *
+   * 0 before any of it has left, 1 once the particles have come to rest along
+   * the curve and the chart has finished drawing. Deliberately a separate span
+   * from heroExit and overlapping it: the light starts leaving while the orb is
+   * still fading, which is the point of the beat.
+   */
+  curveSeed: number;
 }
 
-const NEUTRAL: ScrollSignals = { heroExit: 0 };
+const NEUTRAL: ScrollSignals = { heroExit: 0, curveSeed: 0 };
 
 export const scrollSignals: ScrollSignals = { ...NEUTRAL };
 

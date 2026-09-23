@@ -642,6 +642,22 @@
   color: var(--landing-deep-subtle);
 }
 
+/* ── The particle layer ───────────────────────────────────────────
+   Fixed and full-viewport, because the light it carries starts in the hero and
+   lands in the Problem section — no layer inside either one could do both. Its
+   box is therefore exactly the viewport, which is what lets the canvas use an
+   orthographic camera at one world unit per CSS pixel and land its particles on
+   a chart it reads out of getBoundingClientRect.
+
+   Above the page, below the nav (z-50), and never in the way of a pointer. */
+
+.landing-particle-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
 /* ── Smooth scroll ─────────────────────────────────────────────────
    Lenis marks <html> while it is running. It animates the real window scroll
    rather than transforming a wrapper — which is why the sticky nav still works
