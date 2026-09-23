@@ -4,7 +4,7 @@ import Lenis from 'lenis';
 import { ENHANCED_WIDTH_QUERY } from '../viewport';
 import { buildCurveSeed } from './curveSeed';
 import { buildHeroExit } from './heroExit';
-import { resetScrollSignals } from './signals';
+import { flushSignalChanges, resetScrollSignals } from './signals';
 
 /**
  * The landing page's scroll engine: Lenis for the feel of the scroll, GSAP
@@ -87,7 +87,12 @@ export function startScrollEngine(): () => void {
     // loop for the whole page, and makes it impossible for scroll position and
     // the tweens reading it to be a frame apart. lagSmoothing off, because
     // GSAP's catch-up would desynchronise them after a dropped frame.
-    const tick = (time: number) => lenis.raf(time * 1000);
+    const tick = (time: number) => {
+      lenis.raf(time * 1000);
+      // After GSAP has rendered this frame's tweens, so the watchers see the
+      // values the scrub just wrote. This is what wakes a paused canvas.
+      flushSignalChanges();
+    };
     gsap.ticker.add(tick);
     gsap.ticker.lagSmoothing(0);
 

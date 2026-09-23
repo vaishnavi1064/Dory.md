@@ -3,9 +3,10 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Play } from 'lucide-react';
 import { Annotation } from '../components/Annotation';
 import { GlowOrb } from '../components/GlowOrb';
-import { VIEWPORT, sectionReveal, useMotionPolicy } from '../motion';
+import { sectionReveal, useMotionPolicy, useRevealViewport } from '../motion';
 
 export function FinalCta() {
+  const reveal = useRevealViewport();
   const { variants } = useMotionPolicy();
 
   return (
@@ -18,7 +19,7 @@ export function FinalCta() {
         variants={variants(sectionReveal)}
         initial="hidden"
         whileInView="shown"
-        viewport={VIEWPORT}
+        viewport={reveal}
       >
         <p className="landing-eyebrow">Your ideas deserve a better memory</p>
 

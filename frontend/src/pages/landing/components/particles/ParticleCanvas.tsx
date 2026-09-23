@@ -5,6 +5,7 @@ import { THEME_CHANGED_EVENT } from '@/lib/themeMode';
 import { PARTICLE_TRAVEL as TRAVEL } from '../../scroll/choreography';
 import { scrollSignals } from '../../scroll/signals';
 import { sampleCurve } from '../curveGeometry';
+import { WakeOnSignals } from '../WakeOnSignals';
 import { cssColorHex, LAVENDER_FALLBACK } from '../orb/orbGate';
 import { createAnchorFrame, readAnchors, toScreenX, toScreenY } from './anchors';
 
@@ -131,6 +132,10 @@ function Field({ color, onDark }: { color: string; onDark: boolean }) {
       targetX,
       targetY,
       anchors: createAnchorFrame(),
+      /** Whether the field is currently wiped. Tracked rather than inferred
+       *  from the buffer, so scrubbing back to the top always clears exactly
+       *  once and never leaves a particle stranded on the curve. */
+      cleared: false,
     };
   }, []);
 
@@ -153,15 +158,17 @@ function Field({ color, onDark }: { color: string; onDark: boolean }) {
     const s = state;
     uniforms.uDpr.value = dpr;
 
-    // Nothing has left yet and nothing is on screen — skip the arithmetic and,
-    // more importantly, skip the two layout reads.
+    // Scrubbed back to before the beat: wipe the field once and stop. Skipping
+    // the arithmetic also skips the two layout reads, which is the point.
     if (seed <= 0) {
-      if (s.alphas[0] !== 0 || s.alphas[COUNT - 1] !== 0) {
+      if (!s.cleared) {
         s.alphas.fill(0);
         (mesh.geometry.attributes.aAlpha as BufferAttribute).needsUpdate = true;
+        s.cleared = true;
       }
       return;
     }
+    s.cleared = false;
 
     const a = readAnchors(s.anchors);
     if (!a.ready) return;
@@ -270,11 +277,15 @@ export function ParticleCanvas() {
         flat
         orthographic
         dpr={[1, 1.5]}
+        // Fixed and full-viewport, so its box cannot change on scroll. R3F
+        // re-measures on scroll by default; here that is pure churn.
+        resize={{ scroll: false }}
         frameloop={live ? 'always' : 'demand'}
         gl={{ antialias: false, alpha: true, powerPreference: 'low-power' }}
         camera={{ zoom: 1, position: [0, 0, 100], near: 0.1, far: 1000 }}
       >
         <Field color={theme.color} onDark={theme.dark} />
+        <WakeOnSignals />
       </Canvas>
     </div>
   );

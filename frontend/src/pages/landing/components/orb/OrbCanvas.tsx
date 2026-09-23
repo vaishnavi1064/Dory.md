@@ -5,6 +5,7 @@ import { useReducedMotion } from 'framer-motion';
 import { Color, type Mesh } from 'three';
 import { THEME_CHANGED_EVENT } from '@/lib/themeMode';
 import { scrollSignals } from '../../scroll/signals';
+import { WakeOnSignals } from '../WakeOnSignals';
 import { cssColorHex, LAVENDER_FALLBACK } from './orbGate';
 
 /**
@@ -91,6 +92,11 @@ const FRAGMENT = /* glsl */ `
 
 function Orb({ color, reduced }: { color: string; reduced: boolean }) {
   const mesh = useRef<Mesh>(null);
+  /** Our own clock rather than the renderer's. Its elapsedTime only advances on
+   *  frames that actually render, so a pause hands back one enormous jump and
+   *  the breathe teleports to a new phase. Clamping the delta keeps it
+   *  continuous across a sleep. */
+  const breath = useRef(0);
 
   // Stable across renders: the frame loop writes straight into .value, and a
   // fresh object every render would throw that away.
@@ -103,7 +109,7 @@ function Orb({ color, reduced }: { color: string; reduced: boolean }) {
     [color],
   );
 
-  useFrame((state) => {
+  useFrame((_state, delta) => {
     const m = mesh.current;
     if (!m) return;
 
@@ -120,7 +126,8 @@ function Orb({ color, reduced }: { color: string; reduced: boolean }) {
     }
 
     // 0..1 and back, once per breath. No allocation: setScalar mutates.
-    const k = 0.5 + 0.5 * Math.sin(state.clock.elapsedTime * BREATHE_RATE);
+    breath.current += Math.min(delta, 1 / 20);
+    const k = 0.5 + 0.5 * Math.sin(breath.current * BREATHE_RATE);
     m.scale.setScalar((1 + BREATHE_SCALE * k) * shrink);
     uniforms.uIntensity.value =
       (EMISSIVE_LOW + (EMISSIVE_HIGH - EMISSIVE_LOW) * k) * decay;
@@ -187,6 +194,10 @@ export function OrbCanvas() {
       <Canvas
         flat
         dpr={[1, 1.5]}
+        // This layer scrolls with the hero, and R3F re-measures its container on
+        // every scroll by default. Nothing here reads a pointer and the box only
+        // ever changes size on resize, so the scroll half is pure churn.
+        resize={{ scroll: false }}
         frameloop={reduced || !inView ? 'demand' : 'always'}
         gl={{
           antialias: false, // the composer bypasses MSAA, and nothing here has an edge
@@ -198,6 +209,7 @@ export function OrbCanvas() {
       >
         <Orb color={color} reduced={reduced} />
         <PaintOnce />
+        <WakeOnSignals />
         {/* multisampling 0: nothing in this scene has an edge to alias, and it
             halves the work the composer does. The normal pass is off by
             default and Bloom has no use for one. */}

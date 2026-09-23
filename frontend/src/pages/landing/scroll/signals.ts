@@ -40,4 +40,44 @@ export const scrollSignals: ScrollSignals = { ...NEUTRAL };
  *  route change or a resize past the gate cannot leave the page mid-beat. */
 export function resetScrollSignals() {
   Object.assign(scrollSignals, NEUTRAL);
+  flushSignalChanges();
+}
+
+/* ── change notification ───────────────────────────────────────────────
+   Readers poll these values inside a frame loop, which works right up until the
+   loop is asleep — and both canvases sleep when their section is off screen. A
+   sleeping loop cannot see a signal move, so it holds whatever pose it stopped
+   on. This is how it gets told. */
+
+const watchers = new Set<() => void>();
+
+/** Subscribe to "something moved". Returns an unsubscribe. */
+export function watchSignals(fn: () => void): () => void {
+  watchers.add(fn);
+  return () => {
+    watchers.delete(fn);
+  };
+}
+
+let lastHeroExit = 0;
+let lastCurveSeed = 0;
+
+/**
+ * Fires the watchers if any signal has moved since the last call, and does
+ * nothing at all otherwise. The engine calls this once per frame, so it has to
+ * stay allocation-free — hence the explicit comparison rather than anything
+ * clever over the object.
+ *
+ * ADDING A SIGNAL: add it to the comparison below, or nothing will wake for it.
+ */
+export function flushSignalChanges() {
+  if (
+    scrollSignals.heroExit === lastHeroExit &&
+    scrollSignals.curveSeed === lastCurveSeed
+  ) {
+    return;
+  }
+  lastHeroExit = scrollSignals.heroExit;
+  lastCurveSeed = scrollSignals.curveSeed;
+  for (const fn of watchers) fn();
 }

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
-import { VIEWPORT, sectionReveal, useMotionPolicy } from '../motion';
+import { sectionReveal, useMotionPolicy, useRevealViewport } from '../motion';
 
 interface SectionRevealProps {
   children: ReactNode;
@@ -20,6 +20,7 @@ export function SectionReveal({
   delay = 0,
 }: SectionRevealProps) {
   const { variants } = useMotionPolicy();
+  const reveal = useRevealViewport();
   const Tag = as === 'section' ? motion.section : motion.div;
 
   return (
@@ -29,7 +30,7 @@ export function SectionReveal({
       variants={variants(sectionReveal)}
       initial="hidden"
       whileInView="shown"
-      viewport={VIEWPORT}
+      viewport={reveal}
       transition={delay ? { delay } : undefined}
     >
       {children}

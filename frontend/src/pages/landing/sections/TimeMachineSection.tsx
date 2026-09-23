@@ -4,7 +4,12 @@ import { ArrowRight, Clock } from 'lucide-react';
 import { Annotation } from '../components/Annotation';
 import { CountUp } from '../components/CountUp';
 import { SectionReveal } from '../components/SectionReveal';
-import { VIEWPORT, staggerChild, staggerParent, useMotionPolicy } from '../motion';
+import {
+  staggerChild,
+  staggerParent,
+  useMotionPolicy,
+  useRevealViewport,
+} from '../motion';
 
 const PROJECTIONS = [
   { horizon: '7 days', retention: 74, atRisk: 9, critical: 4 },
@@ -19,6 +24,7 @@ const RING_PCT = 62;
 
 function ProjectionRing() {
   const { reduced } = useMotionPolicy();
+  const reveal = useRevealViewport(0.6);
   const offset = CIRCUMFERENCE * (1 - RING_PCT / 100);
 
   return (
@@ -43,7 +49,7 @@ function ProjectionRing() {
           strokeDasharray={CIRCUMFERENCE}
           initial={{ strokeDashoffset: reduced ? offset : CIRCUMFERENCE }}
           whileInView={{ strokeDashoffset: offset }}
-          viewport={{ once: true, amount: 0.6 }}
+          viewport={reveal}
           transition={{ duration: reduced ? 0 : 1.2, ease: [0.16, 1, 0.3, 1] }}
         />
       </svg>
@@ -61,6 +67,7 @@ function ProjectionRing() {
 
 export function TimeMachineSection() {
   const { variants } = useMotionPolicy();
+  const reveal = useRevealViewport();
 
   return (
     <SectionReveal id="time-machine" className="landing-band-soft border-t border-[var(--border)]">
@@ -94,7 +101,7 @@ export function TimeMachineSection() {
           variants={variants(staggerParent(0.1))}
           initial="hidden"
           whileInView="shown"
-          viewport={VIEWPORT}
+          viewport={reveal}
         >
           <div className="space-y-3">
             {PROJECTIONS.map((p) => (

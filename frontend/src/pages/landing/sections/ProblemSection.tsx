@@ -3,7 +3,7 @@ import { TrendingDown } from 'lucide-react';
 import { CountUp } from '../components/CountUp';
 import { ForgettingCurve } from '../components/ForgettingCurve';
 import { SectionReveal } from '../components/SectionReveal';
-import { VIEWPORT, staggerChild, staggerParent, useMotionPolicy } from '../motion';
+import { staggerChild, staggerParent, useMotionPolicy, useRevealViewport } from '../motion';
 
 /** Either a number we count up to, or a glyph that cannot be counted. */
 type Stat =
@@ -17,6 +17,7 @@ const STATS: Stat[] = [
 ];
 
 export function ProblemSection() {
+  const reveal = useRevealViewport();
   const { variants } = useMotionPolicy();
 
   return (
@@ -39,7 +40,7 @@ export function ProblemSection() {
             variants={variants(staggerParent(0.1))}
             initial="hidden"
             whileInView="shown"
-            viewport={VIEWPORT}
+            viewport={reveal}
           >
             {STATS.map((stat) => (
               <motion.div key={stat.label} variants={variants(staggerChild)}>

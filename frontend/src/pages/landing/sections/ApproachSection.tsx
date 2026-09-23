@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { CalendarCheck, FileText, Sparkles, TrendingDown } from 'lucide-react';
 import { SectionReveal } from '../components/SectionReveal';
-import { VIEWPORT, staggerChild, staggerParent, useMotionPolicy } from '../motion';
+import { staggerChild, staggerParent, useMotionPolicy, useRevealViewport } from '../motion';
 
 const STEPS = [
   {
@@ -27,6 +27,7 @@ const STEPS = [
 ];
 
 export function ApproachSection() {
+  const reveal = useRevealViewport();
   const { variants } = useMotionPolicy();
 
   return (
@@ -48,7 +49,7 @@ export function ApproachSection() {
           variants={variants(staggerParent(0.09))}
           initial="hidden"
           whileInView="shown"
-          viewport={VIEWPORT}
+          viewport={reveal}
         >
           {STEPS.map((step, i) => (
             <motion.li key={step.title} variants={variants(staggerChild)} className="relative">

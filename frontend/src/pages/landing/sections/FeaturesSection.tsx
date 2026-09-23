@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check, Search } from 'lucide-react';
 import { SectionReveal } from '../components/SectionReveal';
-import { VIEWPORT, staggerChild, staggerParent, useMotionPolicy } from '../motion';
+import { staggerChild, staggerParent, useMotionPolicy, useRevealViewport } from '../motion';
 
 const BUCKETS = [
   { label: 'Strong', count: 12, color: 'var(--good)', pct: 88 },
@@ -169,6 +169,7 @@ function QuizCard() {
 }
 
 export function FeaturesSection() {
+  const reveal = useRevealViewport();
   const { variants } = useMotionPolicy();
 
   return (
@@ -189,7 +190,7 @@ export function FeaturesSection() {
           variants={variants(staggerParent(0.09))}
           initial="hidden"
           whileInView="shown"
-          viewport={VIEWPORT}
+          viewport={reveal}
         >
           <motion.div variants={variants(staggerChild)} className="md:col-span-2">
             <MemoryHealthCard />

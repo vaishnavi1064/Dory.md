@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import { useReducedMotion, type Variants } from 'framer-motion';
+import { useEnhancedViewport } from './viewport';
 
 /** The app's easing for anything that "settles" rather than just fades. */
 export const SETTLE = [0.16, 1, 0.3, 1] as const;
@@ -54,6 +56,31 @@ export const mockEntrance: Variants = {
 
 /** Shared viewport config so every section triggers at the same point. */
 export const VIEWPORT = { once: true, amount: 0.25 } as const;
+
+/**
+ * Whether an in-view reveal should fire once and stay put.
+ *
+ * True by default, which is right for a page you read top to bottom. False once
+ * the scroll story is driving, because there every other beat is scrubbed to
+ * scroll position and can be run backwards — a reveal that has already spent
+ * itself would be the one thing on the page that cannot. Scroll up and back
+ * down and it is simply missing.
+ *
+ * The condition is the same one the scroll engine arms on, so the two agree
+ * without having to talk to each other.
+ */
+export function useRevealOnce(): boolean {
+  const reduced = useReducedMotion() ?? false;
+  const wide = useEnhancedViewport();
+  return !(wide && !reduced);
+}
+
+/** Viewport config for a reveal, replaying or not per useRevealOnce. Memoised
+ *  because Framer re-creates its observer when the object identity changes. */
+export function useRevealViewport(amount = 0.25) {
+  const once = useRevealOnce();
+  return useMemo(() => ({ once, amount }), [once, amount]);
+}
 
 /**
  * Motion policy for the whole page.
