@@ -126,7 +126,7 @@ note-authoring AI endpoints (`/api/ai/summarize`, `/api/ai/expand`,
 ```bash
 cd frontend
 npm install
-echo "VITE_API_BASE_URL=http://localhost:8001" > .env.local
+echo "VITE_API_URL=http://localhost:8001" > .env.local
 npm run dev
 ```
 
@@ -135,7 +135,7 @@ The app serves at http://localhost:5173. Log in with `demo@dory.md` / `demo123`,
 Frontend environment variables (`frontend/.env.local`):
 
 ```bash
-VITE_API_BASE_URL=http://localhost:8001
+VITE_API_URL=http://localhost:8001
 VITE_USE_MOCKS=false                  # true renders bundled mock JSON instead of calling the backend
 VITE_DISCOVERY_POLL_MS=30000          # dashboard discovery poll interval (ms)
 ```
