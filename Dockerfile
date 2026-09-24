@@ -28,4 +28,5 @@ EXPOSE 8001
 
 # JWT_SECRET MUST be provided at runtime (the app fails fast at boot without it
 # when DORY_ENV != dev). Provide GROQ_API_KEY etc. via the environment too.
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+# Shell form so $PORT (injected by Render) expands; falls back to 8001 locally.
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8001}
