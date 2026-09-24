@@ -391,11 +391,7 @@ for active recall.
 - **Upload limits** (enforced server-side before any parsing): up to 20 files per
   upload, 10 MB per file, 20 MB in total. Exceeding a limit returns HTTP 400.
 
-## Team
 
-- **Vaishnavi Chaughule**: intelligence layer (decay engine, semantic search, quiz pipeline)
-- **Nikhil Pawar**: backend and deployment (FastAPI, ChromaDB integration, pytest suite)
-- **Shraddha Deshpande**: frontend (dashboard, Discovery card, quiz UI)
 
 Thanks to our UWB Hacks judges, Advitya Gemawat, Ashwin Sekhari and Deepali
 Bharmal, for their time and feedback.
