@@ -17,9 +17,26 @@ import { scrollSignals } from './signals';
  * something new arriving.
  */
 
-/** Starts partway through the hero's own exit — see the overlap above. */
+/**
+ * Starts early in the hero's own exit — see the overlap above.
+ *
+ * 10%, where this used to say 45%. The emitter has to still be on screen when
+ * the light leaves it. The glow's centre is the dashboard's centre, and by 45%
+ * of the hero that point has already passed the top of the viewport, so the
+ * particles slid in from above the edge instead of visibly leaving the card —
+ * the one thing the beat exists to show. Each particle is also deliberately
+ * invisible for the first fraction of its own flight (see the fade-in in
+ * ParticleCanvas), which pushed the first thing you could actually see later
+ * still.
+ *
+ * Starting here puts the whole visible emission inside the window where the
+ * glow is in view. It lengthens the span too, which matters most on tall
+ * windows: the end is pinned to the chart reaching 62% of the viewport, so a
+ * 1080-tall screen used to run the entire beat in about a hundred pixels of
+ * scroll.
+ */
 const START_TRIGGER = '#product';
-const START = '45% top';
+const START = '10% top';
 /** Ends when the chart is sitting comfortably in the upper-middle of the
  *  screen, which is where the eye already is by then. */
 const END = 'center 62%';

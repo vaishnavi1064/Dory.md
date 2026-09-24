@@ -30,6 +30,12 @@ export function hasWebGL(): boolean {
 /** Literal fallback: the sRGB rendering of the light theme's --lavender. */
 export const LAVENDER_FALLBACK = '#c3b9ff';
 
+/** The same for --danger, which the particle field cools toward as it settles
+ *  on the further projection horizons. Unlike --lavender this token is already
+ *  a whole `oklch(...)` expression, so callers pass `var(--danger)` rather than
+ *  wrapping it — the substitution below handles either shape. */
+export const DANGER_FALLBACK = '#e7000f';
+
 /**
  * Resolves a CSS colour expression — including `var(--token)` and `oklch()` —
  * to a plain `#rrggbb` literal that WebGL can use.

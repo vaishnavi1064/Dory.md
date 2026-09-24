@@ -5,6 +5,7 @@ import { FinalCta } from './sections/FinalCta';
 import { Footer } from './sections/Footer';
 import { Hero } from './sections/Hero';
 import { ProblemSection } from './sections/ProblemSection';
+import { ReviewSection } from './sections/ReviewSection';
 import { TimeMachineSection } from './sections/TimeMachineSection';
 import { MemoryParticles } from './components/particles/MemoryParticles';
 import { TopNav } from './sections/TopNav';
@@ -24,6 +25,7 @@ import './landing.css';
  *    ApproachSection  light
  *    FeaturesSection  light   #features
  *    TimeMachine      light   #time-machine
+ *    Review           light   #review
  *    FinalCta         dark    #start
  *    Footer           dark
  */
@@ -48,6 +50,7 @@ export function LandingPage() {
         <ApproachSection />
         <FeaturesSection />
         <TimeMachineSection />
+        <ReviewSection />
         <FinalCta />
       </main>
       <Footer />

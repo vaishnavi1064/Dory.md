@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Play } from 'lucide-react';
 import { Annotation } from '../components/Annotation';
+import { CTA_HOOK } from '../components/ctaGeometry';
 import { GlowOrb } from '../components/GlowOrb';
 import { sectionReveal, useMotionPolicy, useRevealViewport } from '../motion';
 
@@ -13,6 +14,12 @@ export function FinalCta() {
     <section id="start" className="landing-band-dark relative overflow-hidden">
       {/* Smaller and calmer than the hero's — this is a close, not an opening. */}
       <GlowOrb className="-top-[22%] left-1/2 h-[30rem] w-[30rem] -translate-x-1/2 opacity-70" />
+
+      {/* Where the scroll story ends. The particle field reforms into this,
+          having left its twin behind the hero's dashboard six beats ago — which
+          is why it is a static element of its own rather than the drifting orb
+          above it. See components/ctaGeometry. */}
+      <div className="landing-cta-glow" aria-hidden {...{ [CTA_HOOK.glow]: '' }} />
 
       <motion.div
         className="landing-shell relative z-10 flex flex-col items-center py-24 text-center lg:py-32"

@@ -339,11 +339,6 @@
   50%      { transform: translate3d(0, -9px, 0); }
 }
 
-/* ── The background orb ──────────────────────────────────────────
-   A WebGL canvas sitting behind the slab, mounted by HeroOrb. Bleeds well past
-   the card so the halo has somewhere to go; the hero section clips it, so the
-   overhang costs nothing. Never takes a pointer — the slab owns interaction. */
-
 /* ── The glow behind the dashboard ──────────────────────────────────────
    Was a WebGL sphere with a bloom pass and a breathing loop. It is now two
    radial gradients, which look the same sitting still and cannot get stuck
@@ -380,6 +375,44 @@
   filter: blur(30px);
 }
 
+/* ── The glow behind the closing CTA ───────────────────────────────────
+   Twin of .landing-slab-glow above, and deliberately so: the scroll story's
+   particle field leaves that one behind the hero's dashboard and reforms into
+   this one behind the last thing on the page. Same token, same construction,
+   same job.
+
+   Static, unlike the <GlowOrb> that also sits in this section. That one drifts
+   on a keyframe, which is right for a background haze and wrong for something
+   the field has to land on — a target whose box moves every frame is a target
+   the particles chase. See components/ctaGeometry.
+
+   Centred on the section's own middle, which is where the heading and the
+   buttons sit, and pinned behind them (the content column carries z-10). */
+
+.landing-cta-glow {
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  top: 50%;
+  width: min(34rem, 82vw);
+  height: 19rem;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background:
+    radial-gradient(
+      closest-side ellipse at 50% 50%,
+      oklch(var(--lavender) / 0.26) 0%,
+      oklch(var(--lavender) / 0.10) 46%,
+      transparent 72%
+    ),
+    radial-gradient(
+      closest-side ellipse at 50% 54%,
+      oklch(var(--lavender) / 0.16) 0%,
+      oklch(var(--lavender) / 0.05) 58%,
+      transparent 100%
+    );
+  filter: blur(32px);
+}
 
 /* ── Tier-2: the spinnable dashboard slab ────────────────────────────
    CSS 3D, deliberately not WebGL. An earlier pass baked the dashboard into a

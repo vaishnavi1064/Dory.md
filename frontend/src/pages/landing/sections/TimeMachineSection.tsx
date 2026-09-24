@@ -4,18 +4,13 @@ import { ArrowRight, Clock } from 'lucide-react';
 import { Annotation } from '../components/Annotation';
 import { CountUp } from '../components/CountUp';
 import { SectionReveal } from '../components/SectionReveal';
+import { PROJECTIONS, TM_HOOK } from '../components/timeMachineGeometry';
 import {
   staggerChild,
   staggerParent,
   useMotionPolicy,
   useRevealViewport,
 } from '../motion';
-
-const PROJECTIONS = [
-  { horizon: '7 days', retention: 74, atRisk: 9, critical: 4 },
-  { horizon: '30 days', retention: 62, atRisk: 24, critical: 18 },
-  { horizon: '90 days', retention: 38, atRisk: 41, critical: 33 },
-];
 
 const RING = { size: 132, stroke: 11 };
 const RADIUS = (RING.size - RING.stroke) / 2;
@@ -98,6 +93,7 @@ export function TimeMachineSection() {
         {/* ── Right: projections ── */}
         <motion.div
           className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+          {...{ [TM_HOOK.column]: '' }}
           variants={variants(staggerParent(0.1))}
           initial="hidden"
           whileInView="shown"
@@ -106,7 +102,7 @@ export function TimeMachineSection() {
           <div className="space-y-3">
             {PROJECTIONS.map((p) => (
               <motion.div
-                key={p.horizon}
+                key={p.key}
                 variants={variants(staggerChild)}
                 className="landing-card flex items-center gap-4 p-4"
               >
@@ -114,7 +110,13 @@ export function TimeMachineSection() {
                   {p.horizon}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-3)]">
+                  {/* The particle field lands along this track — the bar, not
+                      the fill inside it, so the light reads against the empty
+                      part of the horizon too. See components/particles/anchors. */}
+                  <div
+                    className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-3)]"
+                    {...{ [TM_HOOK.landing]: p.key }}
+                  >
                     <div
                       className="h-full rounded-full bg-[oklch(var(--lavender))]"
                       style={{ width: `${p.retention}%` }}

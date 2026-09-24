@@ -96,3 +96,78 @@ export function toScreenX(frame: AnchorFrame, viewBoxX: number) {
 export function toScreenY(frame: AnchorFrame, viewBoxY: number) {
   return frame.originY + viewBoxY * frame.scale;
 }
+
+/* ── Landings ─────────────────────────────────────────────────────────
+   The curve gave the field one rect and a viewBox, and the maths did the rest.
+   Every beat after it aims at laid-out boxes instead, so a landing is simply
+   "somewhere along this element" — the search card's rows and tags, the time
+   machine's retention bars, and whatever comes next.
+
+   One frame type for all of them. They differ only in which attribute marks a
+   landing and which keys to look for, so those are the two things a frame is
+   built with; everything else is the same discipline as above — allocated once,
+   filled in place, re-read every frame because the boxes move with the scroll. */
+
+export interface LandingBox {
+  /** Left edge and vertical centre of the landing, in viewport pixels. */
+  x: number;
+  y: number;
+  /** Its width, so a particle can be placed along it by fraction. */
+  w: number;
+  /** And its height, for the beats that treat a landing as an area rather than
+   *  a line. The rows and bars ignore this; the review card's outline does not. */
+  h: number;
+}
+
+export interface LandingFrame {
+  /** One box per key, in the same order. */
+  boxes: LandingBox[];
+  /** Cached nodes, re-found only when React has replaced them. */
+  nodes: (Element | null)[];
+  /** False when any landing is missing or unlaid-out — the field stays where
+   *  it is rather than flying at a box that is not there. */
+  ready: boolean;
+  /** The attribute that marks a landing, and the values to look for. */
+  attr: string;
+  keys: readonly string[];
+}
+
+export function createLandingFrame(attr: string, keys: readonly string[]): LandingFrame {
+  return {
+    boxes: keys.map(() => ({ x: 0, y: 0, w: 0, h: 0 })),
+    nodes: keys.map(() => null),
+    ready: false,
+    attr,
+    keys,
+  };
+}
+
+/** Re-reads every landing into `out`. Returns it for convenience; allocates
+ *  nothing. All-or-nothing on purpose: a half-measured target would strand part
+ *  of the field at the origin, which reads as a bug rather than as a beat. */
+export function readLandings(out: LandingFrame): LandingFrame {
+  for (let i = 0; i < out.keys.length; i += 1) {
+    const node = (out.nodes[i] =
+      live(out.nodes[i]) ?? document.querySelector(`[${out.attr}="${out.keys[i]}"]`));
+
+    if (!node) {
+      out.ready = false;
+      return out;
+    }
+
+    const rect = node.getBoundingClientRect();
+    if (!rect.width) {
+      out.ready = false;
+      return out;
+    }
+
+    const box = out.boxes[i];
+    box.x = rect.left;
+    box.y = rect.top + rect.height / 2;
+    box.w = rect.width;
+    box.h = rect.height;
+  }
+
+  out.ready = true;
+  return out;
+}

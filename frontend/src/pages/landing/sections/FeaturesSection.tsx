@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check, Search } from 'lucide-react';
+import { SEARCH_HOOK } from '../components/searchGeometry';
 import { SectionReveal } from '../components/SectionReveal';
 import { staggerChild, staggerParent, useMotionPolicy, useRevealViewport } from '../motion';
 
@@ -10,7 +11,15 @@ const BUCKETS = [
   { label: 'Critical', count: 3, color: 'var(--danger)', pct: 12 },
 ];
 
-const SEARCH_TAGS = ['semantic', 'decay-aware', 'recency', 'hybrid ranking'];
+/* The `key` ties each tag to its landing in SEARCH_LANDINGS, so the particle
+   field aims at the element rather than at a copy of its position. Renaming a
+   label is free; changing a key means changing it in both places. */
+const SEARCH_TAGS = [
+  { label: 'semantic', key: 'semantic' },
+  { label: 'decay-aware', key: 'decay' },
+  { label: 'recency', key: 'recency' },
+  { label: 'hybrid ranking', key: 'hybrid' },
+];
 
 const SCHEDULE = [
   { when: 'Today', what: 'Scaled dot-product attention', tone: 'var(--danger)' },
@@ -75,14 +84,17 @@ function MemoryHealthCard() {
 
 function SmartSearchCard() {
   return (
-    <div className="landing-card flex h-full flex-col p-6">
+    <div className="landing-card flex h-full flex-col p-6" {...{ [SEARCH_HOOK.card]: '' }}>
       <h3 className="text-[1.05rem] font-extrabold text-[var(--text-1)]">Smart search</h3>
       <p className="landing-subtle mt-2 text-[0.88rem] leading-relaxed">
         Dense retrieval re-ranked by what you are most at risk of forgetting — not just
         what matches.
       </p>
 
-      <div className="mt-5 flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
+      <div
+        className="mt-5 flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5"
+        {...{ [SEARCH_HOOK.landing]: 'query' }}
+      >
         <Search size={14} className="shrink-0 text-[var(--text-3)]" />
         <span className="landing-subtle truncate text-[0.82rem] font-semibold">
           how does consensus work
@@ -92,10 +104,11 @@ function SmartSearchCard() {
       <div className="mt-4 flex flex-wrap gap-2">
         {SEARCH_TAGS.map((tag) => (
           <span
-            key={tag}
+            key={tag.key}
             className="rounded-full border border-[oklch(var(--lavender)/0.35)] bg-[oklch(var(--lavender)/0.12)] px-2.5 py-1 text-[0.72rem] font-bold text-[var(--text-2)]"
+            {...{ [SEARCH_HOOK.landing]: tag.key }}
           >
-            {tag}
+            {tag.label}
           </span>
         ))}
       </div>

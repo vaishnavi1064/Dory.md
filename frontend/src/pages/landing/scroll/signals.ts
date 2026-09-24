@@ -19,9 +19,9 @@ export interface ScrollSignals {
    * narrow screens and under reduced motion, where the engine never runs, so
    * readers get the old static behaviour for free.
    *
-   * No reader at the moment: the WebGL orb that dimmed on it has been replaced
-   * by a static gradient. Kept because it is the page's measure of the
-   * hand-over and the next bite needs it.
+   * The hero's glow dims and draws in across this span. That used to be a
+   * shader reading this number every frame; it is a scrubbed tween on the
+   * gradient now, written beside the signal in heroExit.ts.
    */
   heroExit: number;
 
@@ -34,9 +34,64 @@ export interface ScrollSignals {
    * is still on screen, which is the point of the beat.
    */
   curveSeed: number;
+
+  /**
+   * How far the light has left the curve again and reformed into the Smart
+   * search card.
+   *
+   * 0 while it is still lying along the curve, 1 once every particle has come
+   * to rest on one of the card's landings. Sequential with curveSeed rather
+   * than overlapping it, unlike the hero pair: the field has one resting place
+   * at a time, and a particle cannot be settling onto the chart and leaving it
+   * in the same frame.
+   */
+  searchSeed: number;
+
+  /**
+   * How far the light has left the search card and spread out along the time
+   * machine's projection timeline.
+   *
+   * 0 while it is still resting on the card, 1 once every particle that makes
+   * it to a horizon has arrived. Sequential with searchSeed for the same reason
+   * that one is sequential with curveSeed: one resting place at a time.
+   *
+   * Not every particle ends up somewhere. The field thins out toward the far
+   * horizons because the section's own retention figures say it should — see
+   * components/timeMachineGeometry.
+   */
+  tmSeed: number;
+
+  /**
+   * How far the light has gathered back off the projection timeline and onto
+   * the review card.
+   *
+   * 0 while it is still spread across the three horizons, 1 once it has closed
+   * onto the card. The only beat that contracts the field rather than spreading
+   * it, and the only one that undoes something: the decay tint the time machine
+   * put on drains back out across this span.
+   */
+  reviewSeed: number;
+
+  /**
+   * How far the light has left the review card and reformed into the glow
+   * behind the closing call to action.
+   *
+   * 0 while it is still gathered on the recall medallion, 1 once it has settled
+   * into an even, resting cluster. The last signal in the story, and the only
+   * one with nothing after it: where the others hand the field on, this one
+   * puts it down.
+   */
+  ctaSeed: number;
 }
 
-const NEUTRAL: ScrollSignals = { heroExit: 0, curveSeed: 0 };
+const NEUTRAL: ScrollSignals = {
+  heroExit: 0,
+  curveSeed: 0,
+  searchSeed: 0,
+  tmSeed: 0,
+  reviewSeed: 0,
+  ctaSeed: 0,
+};
 
 export const scrollSignals: ScrollSignals = { ...NEUTRAL };
 
@@ -65,6 +120,10 @@ export function watchSignals(fn: () => void): () => void {
 
 let lastHeroExit = 0;
 let lastCurveSeed = 0;
+let lastSearchSeed = 0;
+let lastTmSeed = 0;
+let lastReviewSeed = 0;
+let lastCtaSeed = 0;
 
 /**
  * Fires the watchers if any signal has moved since the last call, and does
@@ -77,11 +136,19 @@ let lastCurveSeed = 0;
 export function flushSignalChanges() {
   if (
     scrollSignals.heroExit === lastHeroExit &&
-    scrollSignals.curveSeed === lastCurveSeed
+    scrollSignals.curveSeed === lastCurveSeed &&
+    scrollSignals.searchSeed === lastSearchSeed &&
+    scrollSignals.tmSeed === lastTmSeed &&
+    scrollSignals.reviewSeed === lastReviewSeed &&
+    scrollSignals.ctaSeed === lastCtaSeed
   ) {
     return;
   }
   lastHeroExit = scrollSignals.heroExit;
   lastCurveSeed = scrollSignals.curveSeed;
+  lastSearchSeed = scrollSignals.searchSeed;
+  lastTmSeed = scrollSignals.tmSeed;
+  lastReviewSeed = scrollSignals.reviewSeed;
+  lastCtaSeed = scrollSignals.ctaSeed;
   for (const fn of watchers) fn();
 }
