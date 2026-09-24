@@ -1,82 +1,182 @@
 # Dory.md 🐟
 
-> The notes app that remembers so you don't have to forget.
+> The notes app that knows what you're about to forget.
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-online-brightgreen)](https://dory-md-fork.vercel.app/login)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-dory--md.vercel.app-brightgreen)](https://dory-md.vercel.app/)
 [![CI](https://github.com/vaishnavi1064/Dory.md/actions/workflows/ci.yml/badge.svg)](https://github.com/vaishnavi1064/Dory.md/actions/workflows/ci.yml)
 ![Hackathon](https://img.shields.io/badge/UWB%20Hacks-The%20Future!%202026-6d5bd0)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
-**Live demo:** https://dory-md-fork.vercel.app/login — sign in with `demo@dory.md` / `demo123`.
+### 👉 Live demo: https://dory-md.vercel.app/
 
-Built at **UWB Hacks: The Future! 2026**.
+> **Heads-up on first load:** the backend runs on Render's free tier, which sleeps
+> when idle. The first request after a quiet period can take **~50 seconds** while
+> it wakes up (cold start); after that it responds normally.
 
 ---
 
-## The problem
+## Table of contents
 
-People take notes constantly but forget most of what they capture within days, and they have no way of knowing which notes are slipping away. Dory.md tracks how well you remember each note over time and resurfaces the ones you are about to forget, so studying effort goes where it actually matters.
+- [What it is](#what-it-is)
+- [Screenshots](#screenshots)
+- [Key features](#key-features)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Getting started](#getting-started)
+- [Deployment](#deployment)
+- [Testing](#testing)
+- [Engineering highlights](#engineering-highlights)
+- [Project structure](#project-structure)
+- [The research behind it](#the-research-behind-it)
+- [Privacy & limits](#privacy--limits)
+- [Team](#team)
+- [License](#license)
 
-## Screenshot
+---
 
-![Dashboard screenshot](./docs/dashboard.png)
+## What it is
 
-> Placeholder — add a dashboard screenshot at `docs/dashboard.png` (the image is not in the repo yet).
+Dory.md is a memory-aware notes app. Every chunk of every note carries a
+**continuously decaying retention score** based on the Ebbinghaus forgetting curve,
+`R(t) = e^(−t / (S·k·216h))`. Here `S` grows with each successful review and `k`
+slows decay for more complex material. That score isn't just shown on a dashboard.
+It's a **first-class ranking signal** across the whole product. Search puts the notes
+you're forgetting first. Reviews are scheduled with FSRS-4. Quizzes are built from
+your weakest material. A knowledge graph spreads reinforcement from a note you
+recall to the notes linked to it.
 
-## What it does
+Dory.md started as a 4-person project at **UWB Hacks: The Future! 2026**. After the
+hackathon it went through a documented production-hardening pass and several
+feature waves.
 
-- Ingests Markdown, PDF, DOCX, HTML, JSON, and plain text, then chunks and embeds each file.
-- Scores per-chunk memory retention with an Ebbinghaus forgetting-curve model and buckets it as strong / fading / weak / critical.
-- Schedules reviews with FSRS-4 spaced repetition and grades each card from your self-rating.
-- Searches semantically across your notes and re-ranks results by what you are most at risk of forgetting.
-- Generates multiple-choice quizzes from your lowest-retention chunks, with a built-in fallback bank when no LLM key is set.
-- Surfaces the single most at-risk note in the background as a "Discovery" card, and projects future retention with a Time Machine view.
+## Screenshots
 
-## How it works
+**Dashboard.** Retention buckets, the projection chips, today's FSRS review queue
+and a "fading memory" discovery card:
 
-### The decay engine
+![Dory.md dashboard](./docs/dashboard.png)
 
-Two complementary memory models live in `intelligence/memory/`. The Ebbinghaus model (`ebbinghaus.py`) computes a continuous retention score `R(t) = e^(-t / (S·k·BASE))`, where `t` is hours since last access, `S` grows with how many times a chunk has been reviewed, and `k` slows decay for more complex content. This is the score that powers the dashboard buckets, the fading feed (`backend/routers/fading.py`), and the Time Machine projection. The FSRS-4 scheduler (`scheduler.py`, wrapping the `fsrs` package) handles active review: when you grade a card 1–4, `backend/routers/review.py` advances its stability, difficulty, and next-due date.
+<!-- TODO: add screenshots — docs/landing.png (marketing landing page hero),
+     docs/graph.png (knowledge graph view), docs/dark-mode.png (dashboard in dark mode).
+     Not embedded yet because the images are not in the repo. -->
 
-### The retrieval layer
+> 📸 More screenshots (landing page, knowledge graph, dark mode) coming soon.
+> Meanwhile, the [live demo](https://dory-md.vercel.app/) shows all of them.
 
-Search is dense semantic retrieval with a composite re-rank. `intelligence/embeddings/provider.py` encodes text with `all-MiniLM-L6-v2` (384-dimensional vectors); `intelligence/retrieval/vector_store.py` stores and queries them in ChromaDB using a cosine HNSW index. For each query, `backend/routers/search.py` pulls the top candidates and scores them with `intelligence/ranking/scoring.py`: `0.4 · similarity + 0.4 · decay_urgency + 0.2 · recency`. The decay-urgency term is what makes search surface notes you are forgetting, not just notes that match.
+## Key features
 
-### The quiz pipeline
-
-`backend/routers/quiz.py` pulls a candidate pool of stale chunks (`get_stale_chunk_candidates`), re-ranks them by true Ebbinghaus retention to pick your lowest-retention chunks, and asks `intelligence/llm/quiz_generation.py` to turn each into a multiple-choice question via Groq (`intelligence/llm/provider.py`). Answers are scored server-side from a session-held answer key, so the client cannot self-grade. If no LLM key is configured, the pipeline falls back to a hardcoded question bank and the feature still works.
-
-## Tech stack
-
-| Layer | Tech |
-|-------|------|
-| Frontend | React 18, Vite 5, TypeScript, Tailwind CSS, Framer Motion |
-| API | FastAPI, Uvicorn, JWT access + refresh, bcrypt |
-| Storage | SQLite (WAL mode), ChromaDB (persistent, cosine HNSW) |
-| ML / embeddings | sentence-transformers — `all-MiniLM-L6-v2` (384-dim) |
-| LLM | Groq — `llama-3.3-70b-versatile` (OpenAI / Anthropic / Ollama swappable via env) |
-| Spaced repetition | FSRS-4 (`fsrs`) for scheduling, Ebbinghaus model for retention scoring |
-| Deployment | Render (backend), Vercel (frontend) |
-| CI | GitHub Actions — backend + intelligence pytest, frontend tsc / lint / build |
+- **Decay-aware search ranking.** Dense semantic search (`all-MiniLM-L6-v2` →
+  ChromaDB) re-ranked by `0.4·similarity + 0.4·decay_urgency + 0.2·recency`. A note
+  you're forgetting can outrank one that only matches better. `POST /api/search`
+  also flags a "discovery" result: the most at-risk note among the top matches.
+- **FSRS-4 spaced repetition.** A review queue ordered by due date, with 1–4
+  self-grading. Each grade updates the card's stability, difficulty and next due
+  date through the `fsrs` scheduler.
+- **AI quizzes with graceful no-key fallback.** Multiple-choice questions are built
+  from your **five lowest-retention chunks**, ranked by true Ebbinghaus retention
+  rather than a SQL recency proxy. The server keeps the answer key, so the client
+  can't grade itself. Without an LLM key, quizzes fall back to a built-in question
+  bank and ingestion still succeeds.
+- **Decay-aware knowledge graph with spreading activation.** Semantic edges link
+  related chunks (cosine similarity ≥ 0.45, at most 8 neighbours per chunk). The
+  graph view colours each node by its retention bucket. When you successfully recall
+  a note, reinforcement spreads to its direct neighbours, damped by edge weight × α
+  (α = 0.3). Each neighbour gets a share of the FSRS stability gain, so it decays
+  more slowly. Its forgetting-curve anchor also moves forward, which raises its
+  current retention (but never to full). Only gains propagate: a failed review never
+  penalises a neighbour.
+- **Time Machine retention projection.** Project every chunk's retention into the
+  future (`GET /api/health?time_offset_hours=…`, plus the dashboard's
+  Now / +24h / +3d / +7d / +30d / +90d chips) to see what will be gone in a month.
+- **Site-wide dark mode.** A light/dark theme driven by CSS custom properties,
+  following the OS preference until you choose one yourself. An inline script
+  applies the theme before first paint, so there's no white flash.
+- **Animated marketing landing page.** A scroll-driven story in which the light
+  leaves the hero glow, settles onto the forgetting curve, then moves through Smart
+  Search, the Time Machine and Review to the closing call to action: one field of
+  particles carried through the whole page. It's built with GSAP ScrollTrigger,
+  Lenis and a Three.js canvas (React Three Fiber). It's lazy-loaded, gated on
+  viewport width, WebGL support and `prefers-reduced-motion`, and reversible in
+  both scroll directions.
+- **Also included:** file ingestion (Markdown, PDF, DOCX, HTML, JSON, plain text)
+  with overlap-aware chunking; a library with folders and bulk actions; a
+  calendar of predicted forget dates; a notes editor; meetings; a Pomodoro focus
+  timer; mood tracking; and full account export and hard delete.
 
 ## Architecture
 
+The codebase is split into three layers, and the dependency arrow only ever points
+inward:
+
+- **`intelligence/`** is a **pure domain layer**: the Ebbinghaus decay engine, the
+  FSRS-4 scheduler, spreading activation, composite ranking, chunking, complexity
+  scoring, and the embedding / vector-store / LLM adapters. It has **no HTTP, no
+  auth and no database code**. A test (`test_intelligence_does_not_import_backend`)
+  enforces this: it parses every module's syntax tree and fails on any import of
+  a backend package.
+- **`backend/`** is **FastAPI**: JWT auth (access + rotating refresh tokens, bcrypt),
+  routing, per-user data isolation, and persistence in **SQLite (WAL mode)** for
+  content, FSRS state and graph edges, plus **ChromaDB** for 384-dimensional
+  vectors.
+- **`frontend/`** is **React 18 + Vite + TypeScript + Tailwind CSS + Framer Motion**
+  for the app. The landing page adds **Three.js (React Three Fiber) + GSAP +
+  Lenis**.
+
 ```mermaid
 flowchart LR
-    FE["Frontend<br/>React + Vite SPA"] -->|REST / JWT| API["API<br/>FastAPI"]
-    API --> DECAY["Decay engine<br/>Ebbinghaus + FSRS-4"]
-    API --> VEC["ChromaDB<br/>vector search"]
-    API --> DB["SQLite<br/>notes + metadata"]
-    API --> LLM["Groq LLM<br/>quiz + categorization"]
+    subgraph Client["Frontend — React 18 + Vite (Vercel)"]
+        APP["App<br/>dashboard · search · review · quiz · graph"]
+        LAND["Landing page<br/>GSAP · Lenis · Three.js"]
+    end
+
+    subgraph Server["Backend — FastAPI (Render, Docker)"]
+        API["REST API<br/>JWT auth · per-user isolation"]
+    end
+
+    subgraph Domain["intelligence/ — pure domain layer"]
+        MEM["memory<br/>Ebbinghaus · FSRS-4 · spreading activation"]
+        RANK["ranking<br/>similarity + decay + recency"]
+        EMB["embeddings · retrieval · llm"]
+    end
+
+    subgraph Data["Data stores"]
+        SQL[("SQLite (WAL)<br/>notes · FSRS state · edges")]
+        VEC[("ChromaDB<br/>384-dim vectors")]
+        LLM(["LLM provider<br/>Groq / OpenAI / Anthropic / Ollama"])
+    end
+
+    APP -->|"REST + JWT (VITE_API_URL)"| API
+    API --> MEM
+    API --> RANK
+    API --> EMB
+    API --> SQL
+    EMB --> VEC
+    EMB -.->|optional| LLM
 ```
 
-## Quick start
+## Tech stack
+
+| Layer | Technologies |
+|---|---|
+| **Frontend (app)** | React 18, Vite 5, TypeScript 5, Tailwind CSS 3, Framer Motion 11, React Router 6, Recharts, react-force-graph-2d, lucide-react, marked + DOMPurify, mammoth |
+| **Frontend (landing)** | Three.js + React Three Fiber, GSAP (ScrollTrigger), Lenis |
+| **API** | FastAPI, Uvicorn, python-jose (JWT), bcrypt, python-multipart |
+| **Storage** | SQLite (WAL mode, foreign keys on), ChromaDB (persistent, cosine HNSW) |
+| **ML / retrieval** | sentence-transformers (`all-MiniLM-L6-v2`, 384-dim), PyTorch 2.5.1 (CPU wheel), NumPy, scikit-learn |
+| **Memory models** | Ebbinghaus retention (NumPy), FSRS-4 (`fsrs`) |
+| **LLM** | Groq by default. OpenAI, Anthropic and Ollama can be swapped in through environment variables |
+| **Parsing** | pdfplumber, python-docx, BeautifulSoup |
+| **Tooling / infra** | pytest, ESLint 9 (`--max-warnings 0`), GitHub Actions, Docker (python:3.12-slim), Vercel, Render |
+
+## Getting started
 
 ### Prerequisites
 
-- Python 3.11+ (CI runs on 3.12)
-- Node 18+
-- Optional: a free [Groq API key](https://console.groq.com) for LLM-generated quizzes, categorization, and the AI note tools. Without it quizzes and categorization fall back automatically; the AI note tools report that they are unconfigured (see the environment notes below).
+- Python 3.11+ (CI and Docker use **3.12**, which has wheels for the pinned CPU build
+  of PyTorch)
+- Node 18+ (CI uses Node 22)
+- *Optional:* a free [Groq API key](https://console.groq.com) for LLM quizzes,
+  auto-categorisation and the AI note tools
 
 ### 1. Clone
 
@@ -85,43 +185,42 @@ git clone https://github.com/vaishnavi1064/Dory.md.git
 cd Dory.md
 ```
 
-### 2. Backend
+### 2. Backend (terminal 1)
 
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env.example .env            # then edit as needed (see variables below)
+cp .env.example .env              # then set DORY_JWT_SECRET (see below)
 uvicorn main:app --port 8001 --reload
 ```
 
-First start downloads the MiniLM model (~90 MB) and warms it; later starts are fast. The API serves at http://localhost:8001 with interactive docs at http://localhost:8001/docs.
+The API runs at http://localhost:8001, with interactive docs at
+http://localhost:8001/docs. The first start downloads the MiniLM model (~90 MB).
 
 Backend environment variables (`backend/.env`):
 
 ```bash
-DORY_ENV=dev                          # dev | development enable demo login and disable rate limits
-DORY_JWT_SECRET=                      # REQUIRED in every environment — no fallback, the app
-                                      #   refuses to boot without it. Generate one with:
+DORY_JWT_SECRET=                      # REQUIRED — no fallback; the app refuses to boot
+                                      #   without it. Generate one with:
                                       #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+DORY_ENV=dev                          # dev enables demo login and disables rate limiting.
+                                      #   Unset or unrecognised values are treated as production.
 DORY_CORS_ORIGINS=http://localhost:5173   # comma-separated list of exact allowed origins
-LLM_PROVIDER=groq                     # groq | openai | anthropic | ollama
-LLM_MODEL=llama-3.3-70b-versatile     # Groq default; change per provider
-GROQ_API_KEY=                         # optional — see the note below
+GROQ_API_KEY=                         # optional
 ```
 
-`backend/.env.example` is the authoritative list and documents every variable the
-code reads; the block above is the subset you need to get running.
+[`backend/.env.example`](backend/.env.example) lists every variable the code reads,
+including the LLM provider and model settings. Without `GROQ_API_KEY`:
 
-Without `GROQ_API_KEY`, quiz generation falls back to a built-in question bank and
-category classification leaves notes as "Other" — both still work. The three
-note-authoring AI endpoints (`/api/ai/summarize`, `/api/ai/expand`,
-`/api/ai/optimize`) have nothing honest to fall back to, so they return
-`503 Service Unavailable` with a message saying the feature needs a key.
+- quizzes use the built-in question bank;
+- new notes are categorised as "Other";
+- the three AI note tools (`/api/ai/summarize`, `/expand`, `/optimize`) return `503`
+  with a message saying a key is needed.
 
-### 3. Frontend
+### 3. Frontend (terminal 2)
 
 ```bash
 cd frontend
@@ -130,28 +229,93 @@ echo "VITE_API_URL=http://localhost:8001" > .env.local
 npm run dev
 ```
 
-The app serves at http://localhost:5173. Log in with `demo@dory.md` / `demo123`, then open **Settings → Demo data → Load demo data** to seed sample notes across several categories with varied retention.
+The app runs at http://localhost:5173. With `DORY_ENV=dev`, log in as
+`demo@dory.md` / `demo123`, then open **Settings → Demo data → Load demo data** to
+seed 87 sample notes across five categories with a spread of retention levels.
 
 Frontend environment variables (`frontend/.env.local`):
 
 ```bash
-VITE_API_URL=http://localhost:8001
-VITE_USE_MOCKS=false                  # true renders bundled mock JSON instead of calling the backend
+VITE_API_URL=http://localhost:8001    # backend origin; falls back to http://localhost:8001 if unset
+VITE_USE_MOCKS=false                  # true serves bundled mock JSON — no backend needed
 VITE_DISCOVERY_POLL_MS=30000          # dashboard discovery poll interval (ms)
 ```
 
-> TODO (custom timer sound): the Focus timer's "Custom" tab plays a synthesized
-> Web Audio chime when a phase ends. To use a real sound instead, drop an MP3 at
-> `frontend/public/sounds/timer-end.mp3` — it's picked up automatically at
-> runtime with no code changes.
+## Deployment
 
-### Tests
+| Piece | Host | How it's built |
+|---|---|---|
+| Frontend | **Vercel** | `vite build`, with an SPA rewrite in [`frontend/vercel.json`](frontend/vercel.json) |
+| Backend | **Render** (free tier, Docker) | The root [`Dockerfile`](Dockerfile): python:3.12-slim with the CPU-only PyTorch build. Uvicorn binds to Render's `$PORT` and falls back to 8001 locally. |
+
+Two environment variables connect the two halves:
+
+- **`VITE_API_URL`** (Vercel) is the Render backend's URL. Vite bakes it into the
+  bundle at build time, so redeploy after you change it.
+- **`DORY_CORS_ORIGINS`** (Render) must include the Vercel origin so the browser is
+  allowed to call the API.
+
+The backend also needs `DORY_JWT_SECRET`, plus `GROQ_API_KEY` if you want LLM
+features.
+
+> SQLite and ChromaDB live on the container's local disk. On Render's free tier
+> that disk is **ephemeral**, so demo data resets whenever the service restarts or
+> redeploys.
+
+## Testing
+
+| Suite | Tests | What it covers |
+|---|---|---|
+| Backend (`backend/tests/`) | **199 passing** | Auth and token rotation, cross-user isolation, the FSRS review loop, dual-store (SQLite + ChromaDB) failure handling, upload limits, quiz scoring and retention ranking, graph edges and spreading activation, account export/delete, meetings, mood, rate limiting |
+| Intelligence (`intelligence/tests/`) | **30 passing** (0.1 s) | The decay engine, ranking, chunking, complexity scoring, spreading activation, and the architectural boundary test |
+| Frontend | gates | `tsc --noEmit`, `eslint --max-warnings 0`, `vite build` |
 
 ```bash
 pip install -r backend/requirements-test.txt
-cd backend && python -m pytest tests/ -v      # backend suite (run from backend/)
-cd .. && python -m pytest intelligence/tests/ -v   # pure intelligence-layer suite
+cd backend && DORY_ENV=dev DORY_SKIP_WARMUP=1 python -m pytest tests/ -q
+cd .. && python -m pytest intelligence/tests/ -q
+
+cd frontend && npx tsc --noEmit && npm run lint && npx vite build
 ```
+
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs every one of
+these gates on each push and pull request to `main`: both pytest suites on Python
+3.12, and typecheck, lint and build on Node 22. The test requirements leave out the
+heavy ML stack; the ML-dependent code sits behind lazy imports and is stubbed in
+the tests, which keeps CI fast. Three backend tests run against the real embedding
+model and skip themselves when it isn't installed. The 199 count comes from a local
+run with the full stack; in CI they show as 196 passed, 3 skipped.
+
+## Engineering highlights
+
+- **The domain boundary is enforced by a test.** `intelligence/` holds all the
+  memory science and ranking with no HTTP, auth or database code. A test parses
+  every module's syntax tree and fails the build on any backend import, so the
+  boundary can't erode unnoticed.
+- **Spreading activation reuses the existing ranking.** Graph reinforcement flows
+  through the same inputs the decay model already reads: FSRS stability
+  (`new_S = S + ΔS · edge_weight · α`) and each chunk's retention anchor. So it feeds
+  the decay-urgency term in the search score without any change to the ranking
+  formula. It's single-hop and only propagates gains. The logic is pure
+  (`intelligence/memory/spreading.py`) and covered by 19 unit tests on clamping,
+  determinism and single-hop behaviour.
+- **A demo seeder that doesn't depend on the date.** The seeder doesn't hard-code
+  timestamps. For each demo chunk it solves the decay equation for the moment that
+  places it in its target retention bucket *now*. The dashboard therefore shows the
+  same strong / fading / weak / critical spread whenever the demo is loaded, instead
+  of drifting to "all critical" over time.
+- **A scroll-driven landing page, built with care.** A single GSAP ScrollTrigger +
+  Lenis engine drives every scroll animation. The particles aim at the forgetting
+  curve's real on-screen sample points, not approximate positions. The engine is
+  lazy-loaded out of the initial bundle, reversible in both directions, and gated
+  on viewport width, WebGL support and reduced-motion preferences. On narrow
+  screens, with reduced motion, or without a GPU, the page stays fully readable and
+  the forgetting curve simply draws itself in.
+- **Consistency across two stores.** Every chunk lives in both SQLite and ChromaDB,
+  which share no transaction. Ingestion compensates file by file: if ChromaDB fails
+  on one file, only that file's SQLite rows are rolled back, and the response lists
+  exactly which files to retry. Account deletion removes vectors first, so a failure
+  aborts before any relational data is touched.
 
 ## Project structure
 
@@ -159,99 +323,67 @@ cd .. && python -m pytest intelligence/tests/ -v   # pure intelligence-layer sui
 Dory.md/
 ├── backend/                  FastAPI app — routing, auth, persistence
 │   ├── main.py               App entry: CORS, lifespan, health checks
-│   ├── routers/              auth, chunks, search, ingest, quiz, review, discovery, fading, stats, ai, health, seed
-│   ├── services/             category classification orchestration
+│   ├── routers/              auth, chunks, ingest, search, review, quiz, graph, health (Time Machine),
+│   │                         discovery, fading, stats, ai, account, meetings, mood, seed
+│   ├── core/                 knowledge-graph edge generation
 │   ├── database/             db.py + schema.sql (SQLite, WAL)
-│   ├── models/               Pydantic request/response schemas
-│   ├── parsers/              PDF / DOCX / HTML / text extractors
-│   ├── tests/                pytest (auth, authz, FSRS loop, rate limit, …)
-│   ├── Procfile              Render process definition
-│   └── requirements.txt
-├── intelligence/             Pure domain layer — no HTTP, no DB
-│   ├── memory/               ebbinghaus.py (retention) + scheduler.py (FSRS-4)
+│   ├── models/               Pydantic schemas
+│   ├── parsers/              PDF / DOCX / HTML / JSON / text extractors
+│   └── tests/                pytest suite
+├── intelligence/             Pure domain layer — no HTTP, no auth, no DB
+│   ├── memory/               ebbinghaus.py · scheduler.py (FSRS-4) · spreading.py
+│   ├── ranking/              composite scoring (similarity + decay + recency)
 │   ├── embeddings/           SentenceTransformer (all-MiniLM-L6-v2)
 │   ├── retrieval/            ChromaDB vector store (cosine HNSW)
-│   ├── ranking/              composite scoring (similarity + decay + recency)
-│   ├── llm/                  provider abstraction, categorization, quiz generation
+│   ├── llm/                  provider abstraction, categorisation, quiz generation
 │   ├── domain/               chunking + complexity scoring
-│   └── tests/                pure unit tests
+│   └── tests/                pure unit tests + the boundary test
 ├── frontend/                 React + Vite + TypeScript SPA
-│   ├── src/                  pages, components, lib, contexts, styles.css
-│   ├── vercel.json           SPA rewrite config
-│   └── package.json
-├── Dockerfile                Backend container image
-├── .github/workflows/ci.yml  CI: pytest + tsc / lint / build
-└── README.md
+│   └── src/
+│       ├── pages/            app pages (Dashboard, Search, Review, Quiz, Graph, …)
+│       ├── pages/landing/    marketing landing page + scroll engine
+│       ├── components/ lib/ contexts/ hooks/
+│       └── styles.css        design tokens (light + dark)
+├── docs/                     audit, QA, architecture and database reviews
+├── Dockerfile                backend image (Render)
+└── .github/workflows/ci.yml  CI: pytest + tsc / lint / build
 ```
 
 ## The research behind it
 
-Dory.md is grounded in over a century of memory research. Hermann Ebbinghaus's 1885 experiments produced the forgetting curve: retention drops sharply soon after learning and then levels off, and the decline is well described by an exponential function — the shape the decay engine uses. Two findings turn that curve into a study strategy. The spacing effect shows that reviews distributed over time produce far stronger long-term retention than massed cramming, and the testing effect shows that actively recalling information (as in a quiz) strengthens memory more than re-reading it. Dory.md operationalizes all three: it models decay, schedules spaced reviews with FSRS, and quizzes you for active recall.
+Hermann Ebbinghaus's 1885 experiments produced the forgetting curve: retention drops
+sharply soon after learning and then levels off, a shape well described by an
+exponential. Two later findings turn that curve into a study strategy. The
+**spacing effect**: reviews spread over time beat cramming. The **testing effect**:
+actively recalling information strengthens memory more than re-reading it. Dory.md
+uses all three. It models decay, schedules spaced reviews with FSRS, and quizzes you
+for active recall.
 
-On the engineering side, retrieval uses `all-MiniLM-L6-v2`, a compact sentence-transformer that scores well on the MTEB benchmark relative to its size and runs comfortably on CPU — a deliberate trade for fast, dependency-light deployment. Vectors are indexed in ChromaDB with an HNSW graph under cosine distance for approximate nearest-neighbor search. For v1 we chose dense-only retrieval with a composite re-rank (similarity, decay urgency, recency) rather than a sparse/dense hybrid; it is simpler to reason about and tune, and the decay-urgency signal — not lexical matching — is the feature that differentiates the product. Hybrid retrieval is on the v2 roadmap.
+- Murre & Dros (2015), *Replication and Analysis of Ebbinghaus' Forgetting Curve*: https://doi.org/10.1371/journal.pone.0120644
+- Roediger & Karpicke (2006), *Test-Enhanced Learning*: https://doi.org/10.1111/j.1467-9280.2006.01693.x
+- Reimers & Gurevych (2019), *Sentence-BERT*: https://arxiv.org/abs/1908.10084
+- Malkov & Yashunin (2016), *Efficient and robust ANN search using HNSW graphs*: https://arxiv.org/abs/1603.09320
 
-- Murre & Dros (2015), *Replication and Analysis of Ebbinghaus' Forgetting Curve* — https://doi.org/10.1371/journal.pone.0120644
-- Roediger & Karpicke (2006), *Test-Enhanced Learning* — https://doi.org/10.1111/j.1467-9280.2006.01693.x
-- Reimers & Gurevych (2019), *Sentence-BERT* — https://arxiv.org/abs/1908.10084
-- Malkov & Yashunin (2016), *Efficient and robust ANN search using HNSW graphs* — https://arxiv.org/abs/1603.09320
+## Privacy & limits
 
-## v1 vs v2
-
-### Shipped in v1 (this repo)
-
-- File ingestion (Markdown, PDF, DOCX, HTML, JSON, text) with chunking and embedding
-- Ebbinghaus retention scoring with strong / fading / weak / critical buckets
-- FSRS-4 spaced-repetition review loop with self-grading
-- Dense semantic search with composite (similarity + decay + recency) re-ranking
-- LLM-generated quizzes from lowest-retention chunks, with a graceful fallback bank
-- Background Discovery card and Time Machine retention projection
-- JWT auth (access + refresh rotation), bcrypt hashing, per-user data isolation
-- LLM-based category classification (Groq, swappable provider)
-
-### Coming in v2
-
-- Hybrid retrieval (BM25 + dense, fused with Reciprocal Rank Fusion)
-- Accessibility-first redesign
-- Voice capture (speech-to-text and text-to-speech)
-- Confidence calibration on quiz answers
-- Goal tracking
-- Per-user FSRS parameter optimization
+- **LLM usage.** Note content is sent to the configured LLM provider (Groq by
+  default) for categorisation and quiz generation. Set `LLM_PROVIDER=ollama` to keep
+  everything on your own machine. Embeddings and search always run locally.
+- **Your data.** `GET /api/account/export` downloads everything stored about you as
+  JSON, excluding credentials and session tokens. `DELETE /api/account` hard-deletes
+  your account from both stores.
+- **Upload limits** (enforced server-side before any parsing): up to 20 files per
+  upload, 10 MB per file, 20 MB in total. Exceeding a limit returns HTTP 400.
 
 ## Team
 
-- **Vaishnavi** — Intelligence layer: decay engine, semantic search, quiz pipeline. <!-- TODO: LinkedIn / GitHub link -->
-- **Nikhil** — Backend and deployment: FastAPI, ChromaDB integration, pytest suite. <!-- TODO: LinkedIn / GitHub link -->
-- **Shraddha** — Frontend: dashboard, Discovery card, quiz UI. <!-- TODO: LinkedIn / GitHub link -->
+- **Vaishnavi Chaughule**: intelligence layer (decay engine, semantic search, quiz pipeline)
+- **Nikhil Pawar**: backend and deployment (FastAPI, ChromaDB integration, pytest suite)
+- **Shraddha Deshpande**: frontend (dashboard, Discovery card, quiz UI)
 
-## Acknowledgments
-
-Thanks to our UWB Hacks judges — Advitya Gemawat, Ashwin Sekhari, and Deepali Bharmal — for their time and feedback.
-
-## Privacy
-
-Dory.md sends note content to a third-party LLM for two features: category
-classification and quiz generation. By default this is [Groq](https://groq.com),
-whose API processes the text you ingest. See [Groq's privacy policy](https://groq.com/privacy)
-for how they handle data.
-
-If you would rather keep everything local, set `LLM_PROVIDER=ollama` (with a local
-[Ollama](https://ollama.com) server) — note content then never leaves your machine.
-Embeddings and semantic search are always computed locally regardless of provider.
-
-You own your data. The API exposes `GET /api/account/export` to download everything
-we store about you as JSON, and `DELETE /api/account` to permanently erase your
-account and all associated data (a hard delete — no soft-delete, no grace period).
-
-### Limits
-
-File upload caps (`POST /api/ingest`), enforced server-side:
-
-- **Max files per upload:** 20
-- **Max size per file:** 10 MB
-- **Max total size per upload:** 20 MB
-
-Exceeding any limit returns HTTP 400 with a descriptive error message.
+Thanks to our UWB Hacks judges, Advitya Gemawat, Ashwin Sekhari and Deepali
+Bharmal, for their time and feedback.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE). Copyright (c) 2026 Vaishnavi Chaughule.
+MIT. See [LICENSE](./LICENSE). Copyright (c) 2026 Vaishnavi Chaughule.
