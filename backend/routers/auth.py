@@ -1,4 +1,5 @@
 import hashlib
+import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -31,6 +32,13 @@ router = APIRouter()
 
 _DEMO_EMAIL = "demo@dory.md"
 _DEMO_PASSWORD = "demo123"
+
+
+def demo_login_allowed() -> bool:
+    """Demo login is on in dev, and in any other environment only when
+    DORY_ALLOW_DEMO_LOGIN=1 — for a public demo deployment that wants visitors to
+    land in a populated account (pair with DORY_AUTOSEED_DEMO=1)."""
+    return is_dev_env() or os.getenv("DORY_ALLOW_DEMO_LOGIN") == "1"
 ACCESS_TOKEN_TTL = timedelta(hours=1)
 REFRESH_TOKEN_TTL = timedelta(days=30)
 
@@ -136,9 +144,9 @@ def register(body: RegisterBody):
 
 @router.post("/auth/login", dependencies=[Depends(rate_limit("auth"))])
 def login(body: LoginBody):
-    # The demo account is a real seeded user; only allow it outside production so
-    # the public deployment can't be logged into with shared demo credentials.
-    if body.email == _DEMO_EMAIL and not is_dev_env():
+    # The demo account is a real seeded user with shared, published credentials,
+    # so it is dev-only unless a deployment explicitly opts in.
+    if body.email == _DEMO_EMAIL and not demo_login_allowed():
         raise HTTPException(status_code=401, detail="Demo account disabled in production.")
     user = get_user_by_email(body.email)
     if not user:

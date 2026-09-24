@@ -12,6 +12,7 @@ from collections import Counter
 import pytest
 
 from database.db import (
+    DEFAULT_USER_ID,
     count_chunks,
     get_all_chunks,
     get_chunk_ids_by_source_prefix,
@@ -296,3 +297,71 @@ def test_seeding_is_scoped_to_the_caller(client, register_user):
 
 def test_seed_requires_auth(client):
     assert client.post("/api/seed").status_code == 401
+
+
+# -- Startup auto-seed ----------------------------------------------------------
+
+def demo_ids() -> list[str]:
+    return get_chunk_ids_by_source_prefix(DEFAULT_USER_ID, seed_router.DEMO_SOURCE_PREFIX)
+
+
+def test_autoseed_populates_an_empty_demo_account(client):
+    assert demo_ids() == []
+
+    seed_router.autoseed_demo_if_empty()
+
+    assert len(demo_ids()) == len(seed_router._SEED_ITEMS)
+    for bucket in BUCKETS:
+        assert live_buckets(DEFAULT_USER_ID)[bucket] > 0
+
+
+def test_autoseed_skips_when_demo_corpus_already_present(client):
+    seed_router.autoseed_demo_if_empty()
+    before = sorted(demo_ids())
+
+    seed_router.autoseed_demo_if_empty()
+
+    # Same rows, not a rebuilt corpus with fresh ids.
+    assert sorted(demo_ids()) == before
+
+
+def test_autoseed_never_touches_real_users(client, register_user):
+    _, token = register_user()
+    uid = _user_id_from(token)
+    insert_chunk(content="my own note", source_file="notes.md",
+                 complexity_score=0.5, user_id=uid)
+
+    seed_router.autoseed_demo_if_empty()
+
+    assert count_chunks(uid) == 1
+
+
+def test_autoseed_swallows_seed_failures(client, monkeypatch):
+    def boom(**_kwargs):
+        raise RuntimeError("vector store down")
+
+    monkeypatch.setattr(seed_router, "seed_demo_data", boom)
+
+    seed_router.autoseed_demo_if_empty()  # must not raise
+
+    assert demo_ids() == []
+
+
+@pytest.mark.parametrize("flag, expected", [(None, False), ("0", False), ("1", True)])
+def test_lifespan_starts_autoseed_only_when_opted_in(tmp_path, monkeypatch, flag, expected):
+    import threading
+
+    from fastapi.testclient import TestClient
+
+    import main
+
+    called = threading.Event()
+    monkeypatch.setattr(main, "autoseed_demo_if_empty", called.set)
+    monkeypatch.setenv("DORY_DB_PATH", str(tmp_path / "boot.db"))
+    if flag is None:
+        monkeypatch.delenv("DORY_AUTOSEED_DEMO", raising=False)
+    else:
+        monkeypatch.setenv("DORY_AUTOSEED_DEMO", flag)
+
+    with TestClient(main.app):
+        assert called.wait(timeout=5 if expected else 0.2) is expected

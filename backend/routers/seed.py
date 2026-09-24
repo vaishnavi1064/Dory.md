@@ -6,6 +6,8 @@ loaded rather than decaying into all-critical over time. Reloading clears the
 previous demo corpus from both stores first, so it works on an already-decayed
 database.
 """
+import logging
+import os
 import random
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -14,7 +16,9 @@ from fastapi import APIRouter, Depends
 
 from core.graph_edges import rebuild_edges_for_user
 from database.db import (
+    DEFAULT_USER_ID,
     delete_chunks_by_source_prefix,
+    get_chunk_ids_by_source_prefix,
     insert_chunk,
     set_retention_anchors,
     update_chunk_category,
@@ -25,6 +29,7 @@ from intelligence.memory import classify_retention, hours_until_retention
 from intelligence.retrieval import add_chunks, delete_chunks as chroma_delete_chunks
 
 router = APIRouter()
+logger = logging.getLogger("dory")
 
 # Each tuple: (content, source_file, profile, category)
 # Profiles: strong / fading / weak / critical → drives retention via backdated last_accessed.
@@ -262,3 +267,29 @@ def seed_demo_data(user_id: str = Depends(get_current_user_id)):
             f"linked by {graph['edges_total']} connections."
         ),
     }
+
+
+def autoseed_enabled() -> bool:
+    """DORY_AUTOSEED_DEMO=1 opts in. Off by default so local runs and tests are
+    unaffected; meant for hosts with ephemeral disks, where the demo corpus is
+    wiped on every restart."""
+    return os.getenv("DORY_AUTOSEED_DEMO") == "1"
+
+
+def autoseed_demo_if_empty() -> None:
+    """Seed the demo account's corpus if it has none. Run once at startup.
+
+    Reuses seed_demo_data unchanged, so it is scoped the same way: only the demo
+    user, only 'demo/' rows. Skips when any demo chunk already exists, so a
+    restart on a persistent disk never rebuilds (or reshuffles) a corpus the
+    demo user has been using. Never raises — a failed seed is logged and the app
+    carries on with an empty demo account, exactly as before this existed.
+    """
+    try:
+        if get_chunk_ids_by_source_prefix(DEFAULT_USER_ID, DEMO_SOURCE_PREFIX):
+            logger.info("Demo auto-seed skipped: demo corpus already present")
+            return
+        result = seed_demo_data(user_id=DEFAULT_USER_ID)
+        logger.info("Demo auto-seed: %s", result["message"])
+    except Exception:
+        logger.exception("Demo auto-seed failed; continuing without demo data")

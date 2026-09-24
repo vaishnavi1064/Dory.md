@@ -28,6 +28,8 @@ from fastapi.responses import Response
 
 from database.db import (
 
+    DEFAULT_USER_ID,
+
     delete_user_data,
 
     get_access_log,
@@ -75,6 +77,14 @@ def delete_account(user_id: str = Depends(get_current_user_id)):
     """Hard-delete the authenticated user's account and ALL associated data from
 
     both ChromaDB and SQLite."""
+
+    # The demo account is shared by every visitor to the public deployment; one of
+
+    # them must not be able to wipe it for everyone else.
+
+    if user_id == DEFAULT_USER_ID:
+
+        raise HTTPException(status_code=403, detail="The demo account can't be deleted.")
 
     # ChromaDB first: if this fails we abort before touching SQLite, so nothing is
 

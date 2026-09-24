@@ -9,6 +9,11 @@
 
 ### 👉 Live demo: https://dory-md.vercel.app/
 
+**Anyone can try it — log in with `demo@dory.md` / `demo123`.** The demo account
+comes pre-loaded with 87 notes spread across every retention level and linked into
+a knowledge graph, so every feature has something to show. It's a shared account,
+so you may see other visitors' changes. It resets whenever the backend restarts.
+
 > **Heads-up on first load:** the backend runs on Render's free tier, which sleeps
 > when idle. The first request after a quiet period can take **~50 seconds** while
 > it wakes up (cold start); after that it responds normally.
@@ -229,9 +234,11 @@ echo "VITE_API_URL=http://localhost:8001" > .env.local
 npm run dev
 ```
 
-The app runs at http://localhost:5173. With `DORY_ENV=dev`, log in as
-`demo@dory.md` / `demo123`, then open **Settings → Demo data → Load demo data** to
-seed 87 sample notes across five categories with a spread of retention levels.
+The app runs at http://localhost:5173. Log in as `demo@dory.md` / `demo123`; demo
+login is always on with `DORY_ENV=dev`. Then open **Settings → Demo data → Load
+demo data** to seed 87 sample notes across five categories with a spread of
+retention levels. You can also set `DORY_AUTOSEED_DEMO=1` to have the backend seed
+them on startup.
 
 Frontend environment variables (`frontend/.env.local`):
 
@@ -258,15 +265,24 @@ Two environment variables connect the two halves:
 The backend also needs `DORY_JWT_SECRET`, plus `GROQ_API_KEY` if you want LLM
 features.
 
-> SQLite and ChromaDB live on the container's local disk. On Render's free tier
-> that disk is **ephemeral**, so demo data resets whenever the service restarts or
-> redeploys.
+**Public demo account.** SQLite and ChromaDB live on the container's local disk,
+which is **ephemeral** on Render's free tier: it's wiped whenever the service sleeps,
+restarts or redeploys. Two opt-in variables, both off by default in code, keep the
+live demo usable anyway:
+
+- **`DORY_ALLOW_DEMO_LOGIN=1`** allows `demo@dory.md` to log in outside dev.
+  Rate limiting stays on, and the shared demo account can't be deleted through
+  the API.
+- **`DORY_AUTOSEED_DEMO=1`** seeds the demo corpus on startup whenever the demo
+  account has none, using the same seeder as the Settings button. It runs in a
+  background thread, so the port opens immediately and the notes appear a few
+  seconds after boot. It never touches any other account.
 
 ## Testing
 
 | Suite | Tests | What it covers |
 |---|---|---|
-| Backend (`backend/tests/`) | **199 passing** | Auth and token rotation, cross-user isolation, the FSRS review loop, dual-store (SQLite + ChromaDB) failure handling, upload limits, quiz scoring and retention ranking, graph edges and spreading activation, account export/delete, meetings, mood, rate limiting |
+| Backend (`backend/tests/`) | **215 passing** | Auth and token rotation, cross-user isolation, the FSRS review loop, dual-store (SQLite + ChromaDB) failure handling, upload limits, quiz scoring and retention ranking, graph edges and spreading activation, account export/delete, meetings, mood, rate limiting |
 | Intelligence (`intelligence/tests/`) | **30 passing** (0.1 s) | The decay engine, ranking, chunking, complexity scoring, spreading activation, and the architectural boundary test |
 | Frontend | gates | `tsc --noEmit`, `eslint --max-warnings 0`, `vite build` |
 
@@ -283,8 +299,8 @@ these gates on each push and pull request to `main`: both pytest suites on Pytho
 3.12, and typecheck, lint and build on Node 22. The test requirements leave out the
 heavy ML stack; the ML-dependent code sits behind lazy imports and is stubbed in
 the tests, which keeps CI fast. Three backend tests run against the real embedding
-model and skip themselves when it isn't installed. The 199 count comes from a local
-run with the full stack; in CI they show as 196 passed, 3 skipped.
+model and skip themselves when it isn't installed. The 215 count comes from a local
+run with the full stack; in CI they show as 212 passed, 3 skipped.
 
 ## Engineering highlights
 

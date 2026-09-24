@@ -29,6 +29,7 @@ from ratelimit import global_limit_exceeded
 from routers import account, ai, auth, chunks, discovery, fading, graph, health, ingest, meetings, mood, quiz, review, search, seed, stats
 from routers.auth import setup_demo_user
 from routers.deps import require_secret_configured
+from routers.seed import autoseed_demo_if_empty, autoseed_enabled
 from services.category_service import classify_all_uncategorized
 
 setup_logging()
@@ -46,6 +47,12 @@ async def lifespan(app: FastAPI):
     if os.getenv("DORY_SKIP_WARMUP") != "1":
         warm_model()
         threading.Thread(target=classify_all_uncategorized, daemon=True).start()
+    # Ephemeral hosts wipe the demo corpus on every restart. Seed it in the
+    # background so the port opens immediately; the embedding model loads inside
+    # the thread when warm-up was skipped. Started after warm_model() so the two
+    # never race to load the model twice.
+    if autoseed_enabled():
+        threading.Thread(target=autoseed_demo_if_empty, daemon=True).start()
     logger.info("Dory.md API started (env=%s)", os.getenv("DORY_ENV", "production"))
     yield
 
