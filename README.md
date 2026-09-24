@@ -4,7 +4,6 @@
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-dory--md.vercel.app-brightgreen)](https://dory-md.vercel.app/)
 [![CI](https://github.com/vaishnavi1064/Dory.md/actions/workflows/ci.yml/badge.svg)](https://github.com/vaishnavi1064/Dory.md/actions/workflows/ci.yml)
-![Hackathon](https://img.shields.io/badge/UWB%20Hacks-The%20Future!%202026-6d5bd0)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
 ### 👉 Live demo: https://dory-md.vercel.app/
@@ -34,7 +33,7 @@ so you may see other visitors' changes. It resets whenever the backend restarts.
 - [Project structure](#project-structure)
 - [The research behind it](#the-research-behind-it)
 - [Privacy & limits](#privacy--limits)
-- [Team](#team)
+- [Author](#author)
 - [License](#license)
 
 ---
@@ -50,9 +49,10 @@ you're forgetting first. Reviews are scheduled with FSRS-4. Quizzes are built fr
 your weakest material. A knowledge graph spreads reinforcement from a note you
 recall to the notes linked to it.
 
-Dory.md started as a 4-person project at **UWB Hacks: The Future! 2026**. After the
-hackathon it went through a documented production-hardening pass and several
-feature waves.
+Dory.md is my full-stack product, and I've built and maintain it across every
+layer. That includes the decay engine and search ranking, the knowledge graph and
+spreading activation, site-wide dark mode, the animated landing page, and the
+Docker/Render + Vercel deployment with its self-seeding public demo.
 
 ## Screenshots
 
@@ -391,14 +391,14 @@ for active recall.
 - **Upload limits** (enforced server-side before any parsing): up to 20 files per
   upload, 10 MB per file, 20 MB in total. Exceeding a limit returns HTTP 400.
 
-## Team
+## Author
 
-- **Vaishnavi Chaughule**: intelligence layer (decay engine, semantic search, quiz pipeline)
-- **Nikhil Pawar**: backend and deployment (FastAPI, ChromaDB integration, pytest suite)
-- **Shraddha Deshpande**: frontend (dashboard, Discovery card, quiz UI)
+Built and maintained by **Vaishnavi Chaughule**. That covers product design, the
+intelligence layer (decay engine, FSRS, ranking, spreading activation), the backend,
+the React app and landing page, testing, CI and deployment.
 
-Thanks to our UWB Hacks judges, Advitya Gemawat, Ashwin Sekhari and Deepali
-Bharmal, for their time and feedback.
+Thanks to Nikhil Pawar and Shraddha Deshpande for contributions to the early
+prototype.
 
 ## License
 
